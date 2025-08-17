@@ -81,13 +81,12 @@ $userRole = $_SESSION['user_role'] ?? 'guest';
         <a href="admin_dashboard.php">Admin Dashboard</a>
         <a href="change_role.php">Manage Users</a>
         <a href="admin_pickups.php">pickup staus</a>
-        <a href="reports.php">View Reports</a>
-        <a href="admin/rate.php">Update Rates</a>
+        <a href="rate.php">Update Rates</a>
 
 
     <?php elseif ($userRole === 'collector'): ?>
         <a href="pickup_schedule.php">Pickup Schedule</a>
-        <a href="collected_items.php">Collected Items</a>
+        <a href="colldash.php">Collected Items</a>
 
         
     <?php elseif ($userRole === 'buyer'): ?>

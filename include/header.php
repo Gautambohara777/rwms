@@ -2,8 +2,19 @@
 // header.php
 if (session_status() === PHP_SESSION_NONE) session_start();
 $userRole = $_SESSION['user_role'] ?? 'guest';
+
+// Project base URL for images & assets
+$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
 ?>
 <style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
     .main-header {
         background-color: #2e7d32;
         color: white;
@@ -11,6 +22,7 @@ $userRole = $_SESSION['user_role'] ?? 'guest';
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-shrink: 0;
     }
 
     .main-header .logo {
@@ -48,24 +60,38 @@ $userRole = $_SESSION['user_role'] ?? 'guest';
     .main-header nav a:hover {
         text-decoration: underline;
     }
+
+    /* Content wrapper to push footer down */
+    .content {
+        flex: 1;
+        padding: 20px;
+    }
+
+    footer {
+        background: #2e7d32;
+        color: white;
+        text-align: center;
+        padding: 10px;
+        flex-shrink: 0;
+    }
 </style>
 
 <header class="main-header">
     <div style="display:flex; align-items:center;">
         <!-- Logo + Company Name -->
-        <a href="home.php" class="logo" title="RecycleHub Home">
-            <img src="img/logo.png" alt="RecycleHub Logo" />
+        <a href="<?php echo $basePath; ?>/home.php" class="logo" title="RecycleHub Home">
+            <img src="<?php echo $basePath; ?>/img/logo.png" alt="RecycleHub Logo" />
             <span class="company-name">RecycleHub</span>
         </a>
     </div>
 
     <nav>
-        <a href="home.php">Home</a>
-        <a href="rates.php">Rates</a>
+        <a href="<?php echo $basePath; ?>/home.php">Home</a>
+        <a href="<?php echo $basePath; ?>/rates.php">Rates</a>
         <?php if (isset($_SESSION['user'])): ?>
-            <a href="logout.php">Logout</a>
+            <a href="<?php echo $basePath; ?>/logout.php">Logout</a>
         <?php else: ?>
-            <a href="login.php">Login</a>
+            <a href="<?php echo $basePath; ?>/login.php">Login</a>
         <?php endif; ?>
     </nav>
 </header>

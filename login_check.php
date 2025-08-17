@@ -24,16 +24,20 @@ if ($result && mysqli_num_rows($result) > 0) {
 
     // Verify password
     if (password_verify($password, $user['password'])) {
-        // ✅ Store only user id in session
+        // ✅ Store user info in session
         $_SESSION['user'] = $user['id'];
-        $_SESSION['user_role'] = $user['role']; // optional if needed for role-based access
-        
-        // Optional: store name or email if needed elsewhere
+        $_SESSION['user_role'] = $user['role']; 
         $_SESSION['user_name'] = $user['name'];
         $_SESSION['user_email'] = $user['email'];
 
-        // Redirect after login
-        header("Location: home.php");
+        // ✅ Redirect based on role
+        if ($user['role'] === 'admin') {
+            header("Location: admin_dashboard.php");
+        } elseif ($user['role'] === 'collector') {
+            header("Location: collector_dashboard.php");
+        } else {
+            header("Location: home.php"); // default for normal users
+        }
         exit();
     } else {
         echo "<script>alert('Incorrect password'); window.location='login.php';</script>";

@@ -37,8 +37,10 @@ while ($col = mysqli_fetch_assoc($collectors)) {
 <head>
     <meta charset="UTF-8">
     <title>Admin - Manage Pickup Requests</title>
+    <link rel="stylesheet" href="assets/style.css"> <!-- Your global CSS file -->
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .content { margin-left: 240px; padding: 20px; } /* Space for sidebar */
         table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 20px; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
         th { background: #2e7d32; color: #fff; }
@@ -48,22 +50,26 @@ while ($col = mysqli_fetch_assoc($collectors)) {
 </head>
 <body>
 
-<h2>Manage Pickup Requests</h2>
+<?php include 'include/header.php'; ?>
+<?php include 'include/sidebar.php'; ?>
 
-<table>
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Requester</th>
-            <th>Waste Type</th>
-            <th>Weight</th>
-            <th>Pickup Date</th>
-            <th>Status</th>
-            <th>Assigned Collector</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody>
+<div class="content">
+    <h2>Manage Pickup Requests</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Requester</th>
+                <th>Waste Type</th>
+                <th>Weight</th>
+                <th>Pickup Date</th>
+                <th>Status</th>
+                <th>Assigned Collector</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
         <?php
         if (mysqli_num_rows($result) > 0) {
             $count = 1;
@@ -104,8 +110,11 @@ while ($col = mysqli_fetch_assoc($collectors)) {
             echo "<tr><td colspan='8'>No pickup requests found.</td></tr>";
         }
         ?>
-    </tbody>
-</table>
+        </tbody>
+    </table>
+</div>
+
 
 </body>
+<?php include 'include/footer.php'; ?>
 </html>

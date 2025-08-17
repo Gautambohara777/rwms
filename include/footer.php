@@ -1,3 +1,9 @@
-<footer style="background: #2e7d32; color: white; text-align: center; padding: 30px 0;">
-    &copy; <?php echo date("Y"); ?> Recycle Hub. All Rights Reserved.
+<footer style="
+    background:#2e7d32;
+    color:#fff;
+    text-align:center;
+    padding:10px;
+    margin-top:auto;
+">
+    &copy; <?php echo date("Y"); ?> Recycle Waste Collection System
 </footer>
