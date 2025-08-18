@@ -61,7 +61,6 @@ mysqli_stmt_close($stmt);
 <body>
   <?php include 'include/header.php'; ?>
   <main>
-    <a href="collector_dashboard.php" class="btn secondary">Back to Dashboard</a>
     <h2>Live Optimized Pickup Route (Greedy Nearest)</h2>
     <div class="wrap">
       <div id="map" class="card"></div>

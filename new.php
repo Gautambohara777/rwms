@@ -1,182 +1,293 @@
-<?php 
-// start_pickup.php
+<?php
 session_start();
-include "connect.php";
+include "connect.php"; // DB connection (must set $con)
 
-// Auth: collector only
-if (!isset($_SESSION['user']) || ($_SESSION['user_role'] ?? '') !== 'collector') {
+if (!isset($_SESSION['user']) || $_SESSION['user_role'] !== 'collector') {
     header("Location: login.php");
     exit();
 }
 
-$collector_id = (int)$_SESSION['user'];
+$collector_id = (int) $_SESSION['user'];
 
-// Fetch in-progress pickups
-$sql = "SELECT pr.*, u.name AS customer_name
-        FROM pickup_requests pr
-        JOIN users u ON pr.user_id = u.id
-        WHERE pr.assigned_collector_id = ?
-          AND pr.status = 'In Progress'
-        ORDER BY pr.created_at ASC";
-$stmt = mysqli_prepare($con, $sql);
+// Assigned pickups
+$sql_assigned = "SELECT COUNT(*) 
+                 FROM pickup_requests 
+                 WHERE assigned_collector_id = ? 
+                   AND LOWER(status) NOT LIKE 'complete%' 
+                   AND LOWER(status) NOT LIKE 'in progress%' 
+                   AND LOWER(status) <> 'collected'";
+$stmt = mysqli_prepare($con, $sql_assigned);
 mysqli_stmt_bind_param($stmt, "i", $collector_id);
 mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-$pickups = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $pickups[] = [
-        'id'            => (int)$row['id'],
-        'customer_name' => $row['customer_name'],
-        'waste_type'    => $row['waste_type'],
-        'weight'        => (float)$row['weight'],
-        'address'       => $row['address'],
-        'lat'           => (float)$row['latitude'],
-        'lng'           => (float)$row['longitude']
-    ];
-}
+mysqli_stmt_bind_result($stmt, $assigned_count);
+mysqli_stmt_fetch($stmt);
 mysqli_stmt_close($stmt);
+$assigned_count = (int) ($assigned_count ?? 0);
+
+// In Progress
+$sql_inprogress = "SELECT COUNT(*) 
+                   FROM pickup_requests 
+                   WHERE assigned_collector_id = ? 
+                     AND LOWER(status) LIKE 'in progress%'";
+$stmt = mysqli_prepare($con, $sql_inprogress);
+mysqli_stmt_bind_param($stmt, "i", $collector_id);
+mysqli_stmt_execute($stmt);
+mysqli_stmt_bind_result($stmt, $inprogress_count);
+mysqli_stmt_fetch($stmt);
+mysqli_stmt_close($stmt);
+$inprogress_count = (int) ($inprogress_count ?? 0);
+
+// Awaiting Approval
+$sql_awaiting = "SELECT COUNT(*) 
+                 FROM pickup_requests 
+                 WHERE assigned_collector_id = ? 
+                   AND LOWER(status) = 'collected'";
+$stmt = mysqli_prepare($con, $sql_awaiting);
+mysqli_stmt_bind_param($stmt, "i", $collector_id);
+mysqli_stmt_execute($stmt);
+mysqli_stmt_bind_result($stmt, $awaiting_count);
+mysqli_stmt_fetch($stmt);
+mysqli_stmt_close($stmt);
+$awaiting_count = (int) ($awaiting_count ?? 0);
+
+// Completed
+$sql_completed = "SELECT COUNT(*) 
+                  FROM pickup_requests 
+                  WHERE assigned_collector_id = ? 
+                    AND LOWER(status) LIKE 'complete%'";
+$stmt = mysqli_prepare($con, $sql_completed);
+mysqli_stmt_bind_param($stmt, "i", $collector_id);
+mysqli_stmt_execute($stmt);
+mysqli_stmt_bind_result($stmt, $completed_count);
+mysqli_stmt_fetch($stmt);
+mysqli_stmt_close($stmt);
+$completed_count = (int) ($completed_count ?? 0);
+
+// Fetch Waste Rates
+$rates = [];
+$result = mysqli_query($con, "SELECT waste_type, rate_per_kg, updated_at FROM waste_rates ORDER BY waste_type ASC");
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rates[] = $row;
+    }
+}
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Live Optimized Pickup Route</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
-  <style>
-    :root { --green:#2e7d32; --light:#f6faf6; --shadow:0 2px 10px rgba(0,0,0,.08); }
-    body{margin:0;font-family:Arial, sans-serif;background:var(--light);}
-    main{padding:20px;}
-    #map{height:520px;border-radius:12px;box-shadow:var(--shadow)}
-    .wrap{display:grid;grid-template-columns:3fr 1fr;gap:16px;margin-top:50px;}
-    .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
-    .leg{border-bottom:1px solid #eee;padding:10px 0;}
-    .btn{background:var(--green);color:#fff;padding:6px 10px;margin:4px;border:0;border-radius:6px;cursor:pointer;}
-    .steps{margin-bottom:12px;padding:10px;background:#f9f9f9;border-radius:8px;}
-  </style>
+<meta charset="UTF-8">
+<title>Collector Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f9f5;
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    header.page-header {
+        background-color: #000;
+        padding: 15px;
+        color: white;
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+    }
+    .dashboard {
+        flex: 1;
+        display: flex;
+    }
+    /* Left side */
+    .left-side {
+        flex: 2;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        gap: 20px;
+    }
+    .counts {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        flex: 1;
+    }
+    .card {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        transform: scale(1.05);
+    }
+    .card h3 {
+        margin-bottom: 10px;
+        font-size: 20px;
+        color: #333;
+    }
+    .card p {
+        font-size: 50px;
+        font-weight: 700;
+        color: #2e7d32;
+        margin: 0;
+    }
+    .start-btn {
+        background: #2e7d32;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 20px;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        text-align: center;
+        transition: background 0.3s;
+        width: 100%;
+    }
+    .start-btn:hover {
+        background-color: #256428;
+    }
+    /* Right side map and rates */
+    .map-box {
+        flex: 1;
+        background: white;
+        padding: 20px;
+        border-radius: 50px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        display: flex;
+        flex-direction: column;
+    }
+    .rate-list {
+      
+        max-height: 200px;
+        overflow-y: auto;
+        margin-bottom: 15px;
+        border: 1px solid #000000ff;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .rate-item {
+        padding: 8px;
+        border-bottom: 1px solid #000000ff;
+        font-size: 20px;
+    }
+    .rate-item:last-child {
+        border-bottom: none;
+    }
+    .rate-item strong {
+        color: #2e7d32;
+    }
+    .search-box {
+        margin-bottom: 10px;
+    }
+    .search-box input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+    }
+    #mapFrame {
+        flex: 1;
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        min-height: 200px; /* Smaller map */
+    }
+    @media (max-width: 900px) {
+        .dashboard {
+            flex-direction: column;
+        }
+        .counts {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 </head>
 <body>
-  <?php include 'include/header.php'; ?>
-  <main>
-    <h2>Live Optimized Pickup Route</h2>
-    <div class="wrap">
-      <div id="map" class="card"></div>
-      <div class="card">
-        <h3>Direction to Current Pickup</h3>
-        <div id="steps"></div>
-        <h3>Pickup List</h3>
-        <div id="list"></div>
-      </div>
+
+<?php include 'include/header.php'; ?>
+
+<header class="page-header">Welcome Collector</header>
+
+<div class="dashboard">
+    <!-- Left side -->
+    <div class="left-side">
+        <div class="counts">
+            <div class="card" onclick="location.href='collectorassigned.php'">
+                <h3>Assigned Pickups</h3>
+                <p><?php echo $assigned_count; ?></p>
+            </div>
+            <div class="card" onclick="location.href='collectorinprogress.php'">
+                <h3>In Progress</h3>
+                <p><?php echo $inprogress_count; ?></p>
+            </div>
+            <div class="card" onclick="location.href='collectorwatingapproval.php'">
+                <h3>Awaiting Approval</h3>
+                <p><?php echo $awaiting_count; ?></p>
+            </div>
+            <div class="card" onclick="location.href='collectorhistory.php'">
+                <h3>Completed Pickups</h3>
+                <p><?php echo $completed_count; ?></p>
+            </div>
+        </div>
+        <button class="start-btn" onclick="location.href='collector_pickup.php'">Start</button>
     </div>
-  </main>
-  <?php include 'include/footer.php'; ?>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
-  <script>
-  const pickups = <?php echo json_encode($pickups); ?>;
+    <!-- Right side (rates + map) -->
+    <div class="map-box">
+        <h3>Current Waste Rates</h3>
+        <div class="search-box">
+            <input type="text" id="rateSearch" placeholder="Search waste type...">
+        </div>
+        <div class="rate-list" id="rateList">
+            <?php foreach ($rates as $rate): ?>
+                <div class="rate-item">
+                    <strong><?php echo htmlspecialchars($rate['waste_type']); ?></strong> - 
+                    Rs.<?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg 
+                    <small>(Updated: <?php echo htmlspecialchars($rate['updated_at']); ?>)</small>
+                </div>
+            <?php endforeach; ?>
+        </div>
 
-  const map = L.map('map').setView([27.7, 85.3], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OSM contributors'
-  }).addTo(map);
+        <h3>Your Current Location</h3>
+        <iframe id="mapFrame" title="Your current location"></iframe>
+    </div>
+</div>
 
-  let collectorMarker, routingControl;
-
-  // Distance calculation (km)
-  function haversine(lat1, lon1, lat2, lon2){
-    const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-    const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-    return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  }
-
-  // Render route for the first (current) pickup only
-  function renderRoute(start, ordered){
-    if(routingControl) map.removeControl(routingControl);
-
-    if(!ordered.length) {
-      document.getElementById('steps').innerHTML = "<p>No pending pickups.</p>";
-      return;
-    }
-
-    const currentPickup = ordered[0];
-    const waypoints = [L.latLng(start.lat,start.lng), L.latLng(currentPickup.lat,currentPickup.lng)];
-
-    routingControl = L.Routing.control({
-      waypoints: waypoints,
-      lineOptions: {styles: [{color: 'blue', weight: 5}]},
-      createMarker: function(i, wp, nWps) {
-        if(i===0){
-          return L.marker(wp.latLng, {
-            icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/64/64113.png",iconSize:[25,25]})
-          }).bindPopup("You (Collector)");
-        } else {
-          return L.marker(wp.latLng, {
-            icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/190/190411.png",iconSize:[25,25]})
-          }).bindPopup(currentPickup.customer_name);
-        }
-      },
-      addWaypoints: false,
-      routeWhileDragging: false,
-      show: false
-    }).addTo(map);
-
-    routingControl.on('routesfound', function(e){
-      let html = '<div class="steps"><strong>To: '+currentPickup.customer_name+'</strong><br>';
-      e.routes[0].instructions.forEach(step=>{
-        html += "• " + step.text + "<br>";
-      });
-      html += '</div>';
-      document.getElementById('steps').innerHTML = html;
+<script>
+// Map
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+        var lat = position.coords.latitude;
+        var lon = position.coords.longitude;
+        document.getElementById('mapFrame').src =
+            "https://maps.google.com/maps?q=" + lat + "," + lon + "&z=15&output=embed";
+    }, function() {
+        document.getElementById('mapFrame').src =
+            "https://maps.google.com/maps?q=Kathmandu&z=12&output=embed";
     });
+} else {
+    document.getElementById('mapFrame').src =
+        "https://maps.google.com/maps?q=Kathmandu&z=12&output=embed";
+}
 
-    // Pickup list with distance
-    let html='';
-    ordered.forEach((p,i)=>{
-      let dist = haversine(start.lat,start.lng,p.lat,p.lng).toFixed(2);
-      html+=`<div class="leg">
-        <strong>${i+1}. ${p.customer_name}</strong><br>
-        ${p.waste_type} • ${p.weight}kg • ${dist} km<br>
-        <button class="btn" onclick="markCollected(${p.id})">Mark Collected</button>
-        <button class="btn" onclick="updatePickup(${p.id})">Update Pickup</button>
-      </div>`;
+// Search filter for rates
+document.getElementById('rateSearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let items = document.querySelectorAll('#rateList .rate-item');
+    items.forEach(item => {
+        let text = item.textContent.toLowerCase();
+        item.style.display = text.includes(filter) ? "" : "none";
     });
-    document.getElementById('list').innerHTML=html;
-  }
+});
+</script>
 
-  // Track live location
-  navigator.geolocation.watchPosition(pos=>{
-    let start={lat:pos.coords.latitude,lng:pos.coords.longitude};
-
-    if(!collectorMarker){
-      collectorMarker=L.marker([start.lat,start.lng],{
-        icon:L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/64/64113.png",iconSize:[25,25]})
-      }).addTo(map).bindPopup("You (Collector)").openPopup();
-    }else{
-      collectorMarker.setLatLng([start.lat,start.lng]);
-    }
-
-    if(pickups.length){
-      renderRoute(start,pickups);
-    }
-  },()=>alert("Location access denied. Enable GPS."),{enableHighAccuracy:true});
-
-  async function markCollected(id){
-    try{
-      const res=await fetch('update_pickup_status.php',{
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:new URLSearchParams({id,status:'Collected'})
-      });
-      if(res.ok) location.reload();
-    }catch(e){ alert('Failed to update.'); }
-  }
-
-  function updatePickup(id){
-    window.location.href = "update_pickup.php?id="+id;
-  }
-  </script>
+<?php include 'include/footer.php'; ?>
 </body>
 </html>

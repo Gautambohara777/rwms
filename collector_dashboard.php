@@ -62,6 +62,15 @@ mysqli_stmt_bind_result($stmt, $completed_count);
 mysqli_stmt_fetch($stmt);
 mysqli_stmt_close($stmt);
 $completed_count = (int) ($completed_count ?? 0);
+
+// Fetch Waste Rates
+$rates = [];
+$result = mysqli_query($con, "SELECT waste_type, rate_per_kg, updated_at FROM waste_rates ORDER BY waste_type ASC");
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rates[] = $row;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -144,26 +153,51 @@ $completed_count = (int) ($completed_count ?? 0);
     .start-btn:hover {
         background-color: #256428;
     }
-    /* Right side map */
+    /* Right side map and rates */
     .map-box {
         flex: 1;
         background: white;
         padding: 20px;
-        border-radius: 12px;
+        border-radius: 50px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.08);
         display: flex;
         flex-direction: column;
     }
-    .map-box h3 {
-        margin: 0 0 10px 0;
-        font-size: 18px;
-        color: #333;
+    .rate-list {
+      
+        max-height: 200px;
+        overflow-y: auto;
+        margin-bottom: 15px;
+        border: 3px solid #000000ff;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .rate-item {
+        padding: 8px;
+        border-bottom: 1px solid #000000ff;
+        font-size: 17px;
+    }
+    .rate-item:last-child {
+        border-bottom: none;
+    }
+    .rate-item strong {
+        color: #2e7d32;
+    }
+    .search-box {
+        margin-bottom: 10px;
+    }
+    .search-box input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
     }
     #mapFrame {
         flex: 1;
         width: 100%;
         border: 0;
         border-radius: 12px;
+        min-height: 200px; /* Smaller map */
     }
     @media (max-width: 900px) {
         .dashboard {
@@ -205,14 +239,29 @@ $completed_count = (int) ($completed_count ?? 0);
         <button class="start-btn" onclick="location.href='collector_pickup.php'">Start</button>
     </div>
 
-    <!-- Right side (map) -->
+    <!-- Right side (rates + map) -->
     <div class="map-box">
+        <h3>Current Waste Rates</h3>
+        <div class="search-box">
+            <input type="text" id="rateSearch" placeholder="Search waste type...">
+        </div>
+        <div class="rate-list" id="rateList">
+            <?php foreach ($rates as $rate): ?>
+                <div class="rate-item">
+                    <strong><?php echo htmlspecialchars($rate['waste_type']); ?></strong> - 
+                    Rs.<?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg 
+                    <small>(Updated: <?php echo htmlspecialchars($rate['updated_at']); ?>)</small>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
         <h3>Your Current Location</h3>
         <iframe id="mapFrame" title="Your current location"></iframe>
     </div>
 </div>
 
 <script>
+// Map
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(position) {
         var lat = position.coords.latitude;
@@ -227,6 +276,16 @@ if (navigator.geolocation) {
     document.getElementById('mapFrame').src =
         "https://maps.google.com/maps?q=Kathmandu&z=12&output=embed";
 }
+
+// Search filter for rates
+document.getElementById('rateSearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let items = document.querySelectorAll('#rateList .rate-item');
+    items.forEach(item => {
+        let text = item.textContent.toLowerCase();
+        item.style.display = text.includes(filter) ? "" : "none";
+    });
+});
 </script>
 
 <?php include 'include/footer.php'; ?>
