@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_selected'])) {
                        SET `status` = 'In Progress' 
                        WHERE id IN ($id_list) 
                          AND `$assignee_col` = $collector_id
-                         AND (LOWER(COALESCE(status,'')) NOT IN ('completed','cancelled','collected','In Progress'))";
+                         AND (LOWER(COALESCE(status,'')) NOT IN ('completed','cancelled','collected','In Progress','Refused'))";
         if (mysqli_query($db, $update_sql)) {
             $message = "Selected pickups marked as 'In Progress'.";
         } else {

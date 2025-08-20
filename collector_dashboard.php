@@ -9,13 +9,14 @@ if (!isset($_SESSION['user']) || $_SESSION['user_role'] !== 'collector') {
 
 $collector_id = (int) $_SESSION['user'];
 
-// Assigned pickups
+// Assigned pickups (exclude refused as well)
 $sql_assigned = "SELECT COUNT(*) 
                  FROM pickup_requests 
                  WHERE assigned_collector_id = ? 
                    AND LOWER(status) NOT LIKE 'complete%' 
                    AND LOWER(status) NOT LIKE 'in progress%' 
-                   AND LOWER(status) <> 'collected'";
+                   AND LOWER(status) <> 'collected'
+                   AND LOWER(status) <> 'refused'";
 $stmt = mysqli_prepare($con, $sql_assigned);
 mysqli_stmt_bind_param($stmt, "i", $collector_id);
 mysqli_stmt_execute($stmt);
@@ -23,6 +24,7 @@ mysqli_stmt_bind_result($stmt, $assigned_count);
 mysqli_stmt_fetch($stmt);
 mysqli_stmt_close($stmt);
 $assigned_count = (int) ($assigned_count ?? 0);
+
 
 // In Progress
 $sql_inprogress = "SELECT COUNT(*) 
