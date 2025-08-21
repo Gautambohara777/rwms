@@ -57,6 +57,7 @@
         'waste_rates' => ['name' => 'Waste Rates', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zM11 7h2v6h-2z'],
         'new_pickups' => ['name' => 'New Pickup Requests', 'icon' => 'M14 10h-2v4h2v-4zm-2 6h-2v2h2v-2zm4-6h-2v4h2v-4zm-4-4h2v2h-2V6z'],
         'verify_pickups' => ['name' => 'Verify Pickups', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'],
+        'reusable_waste' => ['name' => 'List Reusable Waste', 'icon' => 'M12 11a4 4 0 100-8 4 4 0 000 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'],
         'refused_pickups' => ['name' => 'Refused Pickups', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 15 12 11.41 8.41 15 7 13.59 10.59 10 7 6.41 8.41 5 12 8.59 15.59 5 17 6.41 13.41 10 17 13.59z'],
         'reports' => ['name' => 'Reports', 'icon' => 'M22 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H2c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2h-4v2h4V4zm6 16H2V8h20v12zM9 10h2v8H9v-8zm4 0h2v8h-2v-8zm4 0h2v8h-2v-8z']
     ];
@@ -127,6 +128,9 @@
 
                     $refusedPickupsResult = $con->query("SELECT COUNT(*) AS refused_pickups FROM pickup_requests WHERE status = 'Refused'");
                     $refusedPickups = ($refusedPickupsResult && $refusedPickupsResult->num_rows > 0) ? $refusedPickupsResult->fetch_assoc()['refused_pickups'] : 0;
+                    
+                    $fullyCancelledPickupsResult = $con->query("SELECT COUNT(*) AS cancelled_pickups FROM pickup_requests WHERE status = 'Fully Cancelled'");
+                    $fullyCancelledPickups = ($fullyCancelledPickupsResult && $fullyCancelledPickupsResult->num_rows > 0) ? $fullyCancelledPickupsResult->fetch_assoc()['cancelled_pickups'] : 0;
 
                     $stats = [
                         ['name' => 'Total Expected Waste (kg)', 'value' => number_format($expectedWaste, 2), 'color' => 'bg-green-500'],
@@ -216,7 +220,7 @@
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $pickup['user_id']; ?></td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $pickup['waste_type']; ?></td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?php echo ($pickup['status'] === 'Collected' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'); ?>">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?php echo ($pickup['status'] === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'); ?>">
                                                     <?php echo $pickup['status']; ?>
                                                 </span>
                                             </td>
@@ -513,7 +517,8 @@
 
                     // --- Fetch Pending Pickup Requests ---
                     $pendingRequests = [];
-                    $query = "SELECT pr.*, u.name AS requester_name FROM pickup_requests pr JOIN users u ON pr.user_id = u.id WHERE pr.status = 'Pending' ORDER BY pr.pickup_date ASC";
+                    // Corrected query to fetch the user's phone number
+                    $query = "SELECT pr.*, u.name AS requester_name, u.phone AS requester_phone FROM pickup_requests pr JOIN users u ON pr.user_id = u.id WHERE pr.status = 'Pending' ORDER BY pr.pickup_date ASC";
                     $result = $con->query($query);
                     if ($result) {
                         $pendingRequests = $result->fetch_all(MYSQLI_ASSOC);
@@ -528,6 +533,7 @@
                                     <tr>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">#</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Weight (kg)</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Pickup Date</th>
@@ -541,25 +547,30 @@
                                             <tr>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['requester_name']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900 capitalize"><?= htmlspecialchars($request['waste_type']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['weight']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['pickup_date']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                    <form method="POST" action="?page=new_pickups" class="flex items-center gap-2">
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['requester_phone']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['waste_type']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['final_weight']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= date('Y-m-d', strtotime($request['pickup_date'])); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                    <form method="post" action="?page=new_pickups">
                                                         <input type="hidden" name="request_id" value="<?= $request['id']; ?>">
-                                                        <select name="collector_id" class="block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-base">
-                                                            <option value="0">-- Select Collector --</option>
-                                                            <?php foreach ($collectorOptions as $id => $name): ?>
-                                                                <option value="<?= $id; ?>"><?= htmlspecialchars($name); ?></option>
-                                                            <?php endforeach; ?>
-                                                        </select>
-                                                        <button type="submit" name="assign_collector" class="bg-indigo-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg">Assign</button>
+                                                        <div class="flex items-center gap-2">
+                                                            <select name="collector_id" required class="rounded-xl border-gray-300 text-sm">
+                                                                <option value="">Select Collector</option>
+                                                                <?php foreach ($collectorOptions as $id => $name): ?>
+                                                                    <option value="<?= $id; ?>"><?= htmlspecialchars($name); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                            <button type="submit" name="assign_collector" class="bg-green-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-green-700 transition-colors shadow-md">Assign</button>
+                                                        </div>
                                                     </form>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No new pickup requests found.</td></tr>
+                                        <tr>
+                                            <td colspan="7" class="px-6 py-4 text-center text-gray-500">No new pickup requests found.</td>
+                                        </tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -568,31 +579,50 @@
                     <?php
                     break;
                 case 'verify_pickups':
-                    // --- Handle Verification Action ---
+                    // --- Handle Update Action ---
                     $message = '';
-                    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_pickup'])) {
+                    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_pickup_details'])) {
                         $request_id = intval($_POST['request_id']);
-                        $new_status = 'Completed';
+                        $new_final_weight = floatval($_POST['final_weight']);
+                        $new_2rstatus = $_POST['2rstatus'];
+                        $new_status = 'Completed'; // Hardcoded to 'Completed' as per the user's request.
 
-                        $stmt = $con->prepare("UPDATE pickup_requests SET status = ? WHERE id = ? AND status = 'Collected'");
-                        $stmt->bind_param("si", $new_status, $request_id);
+                        // Calculate total_cost based on the new final_weight and waste rate
+                        $rateResult = $con->query("SELECT wr.rate_per_kg FROM pickup_requests pr JOIN waste_rates wr ON pr.waste_type = wr.waste_type WHERE pr.id = $request_id");
+                        $total_cost = 0;
+                        if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
+                            $rate_per_kg = $rateRow['rate_per_kg'];
+                            $total_cost = $new_final_weight * $rate_per_kg;
+                        }
+
+                        // Update the pickup record
+                        $stmt = $con->prepare("UPDATE pickup_requests SET final_weight = ?, total_cost = ?, status = ?, 2rstatus = ? WHERE id = ?");
+                        $stmt->bind_param("ddssi", $new_final_weight, $total_cost, $new_status, $new_2rstatus, $request_id);
                         if ($stmt->execute()) {
-                            $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup request verified and marked as Completed!</p></div>';
+                            $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup details updated successfully!</p></div>';
                         } else {
-                            $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to verify pickup. Please try again.</p></div>';
+                            $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to update pickup details. Please try again. ' . $con->error . '</p></div>';
                         }
                         $stmt->close();
                     }
 
-                    // --- Fetch Collected Pickup Requests ---
-                    $collectedRequests = [];
-                    $query = "SELECT pr.*, u.name AS requester_name FROM pickup_requests pr JOIN users u ON pr.user_id = u.id WHERE pr.status = 'Collected' ORDER BY pr.pickup_date DESC";
+                    // --- Fetch Pickups to Verify ---
+                    $pickupsToVerify = [];
+                    // The query now only selects pickups with status 'Collected' for admin verification.
+                    $query = "
+                        SELECT pr.*, u.name AS requester_name, u.phone AS requester_phone, c.name AS collector_name
+                        FROM pickup_requests pr
+                        JOIN users u ON pr.user_id = u.id
+                        LEFT JOIN users c ON pr.assigned_collector_id = c.id
+                        WHERE pr.status = 'Collected'
+                        ORDER BY pr.pickup_date ASC
+                    ";
                     $result = $con->query($query);
                     if ($result) {
-                        $collectedRequests = $result->fetch_all(MYSQLI_ASSOC);
+                        $pickupsToVerify = $result->fetch_all(MYSQLI_ASSOC);
                     }
                     ?>
-                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Verify Pickups (Collected)</h2>
+                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Verify Pickups</h2>
                     <?php echo $message; ?>
                     <div class="bg-white rounded-2xl shadow-lg p-6">
                         <div class="overflow-x-auto">
@@ -601,32 +631,50 @@
                                     <tr>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">#</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Final Weight (kg)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Final Weight (kg)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Cost ($)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">2R Status</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <?php if (!empty($collectedRequests)): ?>
+                                    <?php if (!empty($pickupsToVerify)): ?>
                                         <?php $count = 1; ?>
-                                        <?php foreach ($collectedRequests as $request): ?>
+                                        <?php foreach ($pickupsToVerify as $pickup): ?>
                                             <tr>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['requester_name']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900 capitalize"><?= htmlspecialchars($request['waste_type']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['final_weight']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= isset($collectorOptions[$request['assigned_collector_id']]) ? htmlspecialchars($collectorOptions[$request['assigned_collector_id']]) : 'N/A'; ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                    <form method="POST" action="?page=verify_pickups">
-                                                        <input type="hidden" name="request_id" value="<?= $request['id']; ?>">
-                                                        <button type="submit" name="verify_pickup" class="bg-green-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-lg">Mark as Completed</button>
-                                                    </form>
-                                                </td>
+                                                <form method="post" action="?page=verify_pickups">
+                                                    <input type="hidden" name="request_id" value="<?= $pickup['id']; ?>">
+                                                    <input type="hidden" name="update_pickup_details" value="1">
+                                                    
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_name']); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_phone']); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['collector_name'] ?? 'N/A'); ?></td>
+                                                    
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <input type="number" step="0.01" name="final_weight" value="<?= htmlspecialchars($pickup['final_weight']); ?>" class="w-24 rounded-xl border-gray-300 shadow-sm text-sm" required>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
+                                                        $<?= number_format($pickup['total_cost'], 2); ?>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <select name="2rstatus" class="rounded-xl border-gray-300 text-sm">
+                                                            <option value="Reuse" <?= ($pickup['2Rstatus'] == 'Reuse' ? 'selected' : ''); ?>>Reuse</option>
+                                                            <option value="Recycle" <?= ($pickup['2Rstatus'] == 'Recycle' ? 'selected' : ''); ?>>Recycle</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-blue-700 transition-colors shadow-md">Update</button>
+                                                    </td>
+                                                </form>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No collected pickups to verify.</td></tr>
+                                        <tr>
+                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No pickups to verify.</td>
+                                        </tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -634,56 +682,175 @@
                     </div>
                     <?php
                     break;
-                case 'refused_pickups':
-                    // --- Handle Re-assign and Delete actions ---
+                case 'reusable_waste':
+                    // --- Handle reusable waste listing with file upload ---
                     $message = '';
+                    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['list_reusable_waste'])) {
+                        // Get data from the form
+                        $title = trim($_POST['title']);
+                        $description = trim($_POST['description']);
+                        $quantity = intval($_POST['quantity']);
+                        $unit = trim($_POST['unit']);
+                        $status = trim($_POST['status']);
+                        $price = floatval($_POST['price']);
+                        $pickup_terms = trim($_POST['pickup_terms']);
+                        $userId = $_SESSION['user']['id']; // Get the logged-in admin's user ID
+
+                        // Check for empty fields
+                        if (empty($title) || empty($description) || empty($quantity) || empty($unit) || empty($status) || !is_numeric($price) || empty($pickup_terms)) {
+                             $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">All fields are required. Please fill out the form completely.</p></div>';
+                        } else {
+                            // File upload logic
+                            $image_url = null;
+                            if (isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
+                                $uploadDir = 'uploads/';
+                                // Create the directory if it doesn't exist
+                                if (!is_dir($uploadDir)) {
+                                    mkdir($uploadDir, 0777, true);
+                                }
+                                $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                                // Generate a unique filename
+                                $uniqueFileName = uniqid('img_') . '.' . $imageFileType;
+                                $targetFilePath = $uploadDir . $uniqueFileName;
+                                
+                                // Check if file is an actual image or fake image
+                                $check = getimagesize($_FILES['image']['tmp_name']);
+                                if($check !== false) {
+                                    // Move the uploaded file
+                                    if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFilePath)) {
+                                        $image_url = $targetFilePath;
+                                    } else {
+                                        $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Sorry, there was an error uploading your file.</p></div>';
+                                    }
+                                } else {
+                                    $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">File is not an image.</p></div>';
+                                }
+                            }
+
+                            // Only proceed with database insertion if the image was uploaded successfully or if no image was required.
+                            if ($image_url) {
+                                $stmt = $con->prepare("INSERT INTO reusable_waste_listings (title, description, quantity, unit, image_url, status, price, pickup_terms, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmt->bind_param("ssissdsi", $title, $description, $quantity, $unit, $image_url, $status, $price, $pickup_terms, $userId);
+                                
+                                if ($stmt->execute()) {
+                                    $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Reusable waste listed successfully!</p></div>';
+                                } else {
+                                    $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Database error: ' . $con->error . '</p></div>';
+                                }
+                                $stmt->close();
+                            }
+                        }
+                    }
+                    ?>
+                    <h2 class="text-4xl font-bold text-gray-800 mb-8">List Reusable Waste</h2>
+                    <?php echo $message; ?>
+                    <div class="bg-white rounded-2xl shadow-lg p-6 max-w-4xl mx-auto">
+                        <form method="POST" action="?page=reusable_waste" enctype="multipart/form-data">
+                            <input type="hidden" name="list_reusable_waste" value="1">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- Title -->
+                                <div>
+                                    <label for="title" class="block text-lg font-medium text-gray-700">Listing Title</label>
+                                    <input type="text" id="title" name="title" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
+                                </div>
+                                <!-- Quantity -->
+                                <div>
+                                    <label for="quantity" class="block text-lg font-medium text-gray-700">Quantity</label>
+                                    <input type="number" id="quantity" name="quantity" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
+                                </div>
+                                <!-- Unit -->
+                                <div>
+                                    <label for="unit" class="block text-lg font-medium text-gray-700">Unit (e.g., pcs, kg, etc.)</label>
+                                    <input type="text" id="unit" name="unit" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
+                                </div>
+                                <!-- Status -->
+                                <div>
+                                    <label for="status" class="block text-lg font-medium text-gray-700">Status</label>
+                                    <select id="status" name="status" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
+                                        <option value="Available">Available</option>
+                                        <option value="Reserved">Reserved</option>
+                                        <option value="Sold">Sold</option>
+                                    </select>
+                                </div>
+                                <!-- Price -->
+                                <div>
+                                    <label for="price" class="block text-lg font-medium text-gray-700">Price ($)</label>
+                                    <input type="number" step="0.01" id="price" name="price" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
+                                </div>
+                                <!-- Image Upload -->
+                                <div>
+                                    <label for="image" class="block text-lg font-medium text-gray-700">Image</label>
+                                    <input type="file" id="image" name="image" required class="mt-1 block w-full text-lg text-gray-900 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 focus:outline-none">
+                                </div>
+                                <!-- Description -->
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="description" class="block text-lg font-medium text-gray-700">Description</label>
+                                    <textarea id="description" name="description" rows="4" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg"></textarea>
+                                </div>
+                                <!-- Pickup Terms -->
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="pickup_terms" class="block text-lg font-medium text-gray-700">Pickup Terms</label>
+                                    <textarea id="pickup_terms" name="pickup_terms" rows="4" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg"></textarea>
+                                </div>
+                            </div>
+                            <div class="mt-8 text-right">
+                                <button type="submit" class="w-full bg-green-600 text-white py-3 px-8 rounded-xl text-lg font-semibold hover:bg-green-700 transition-colors shadow-lg">List Waste</button>
+                            </div>
+                        </form>
+                    </div>
+                    <?php
+                    break;
+                case 'refused_pickups':
+                    // --- Refused Pickups content ---
+                    $message = '';
+
+                    // Handle Reassign and Cancel actions
                     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $request_id = intval($_POST['request_id']);
-                        if (isset($_POST['re_assign'])) {
+
+                        if (isset($_POST['reassign_pickup'])) {
                             $new_collector_id = intval($_POST['new_collector_id']);
                             if ($new_collector_id > 0) {
-                                $stmt = $con->prepare("UPDATE pickup_requests SET assigned_collector_id = ?, status = 'Pending', refused_reason = NULL WHERE id = ?");
+                                $stmt = $con->prepare("UPDATE pickup_requests SET status = 'Approved', assigned_collector_id = ? WHERE id = ?");
                                 $stmt->bind_param("ii", $new_collector_id, $request_id);
                                 if ($stmt->execute()) {
-                                    $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Request re-assigned and status set to Pending.</p></div>';
+                                    $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup re-assigned successfully!</p></div>';
                                 } else {
-                                    $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to re-assign request.</p></div>';
+                                    $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to re-assign pickup. ' . $con->error . '</p></div>';
                                 }
                                 $stmt->close();
                             } else {
-                                $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Please select a valid collector to re-assign.</p></div>';
+                                $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Please select a collector to re-assign the pickup.</p></div>';
                             }
-                        } elseif (isset($_POST['delete_pickup'])) {
-                            $stmt = $con->prepare("DELETE FROM pickup_requests WHERE id = ?");
+                        } elseif (isset($_POST['cancel_pickup'])) {
+                            $stmt = $con->prepare("UPDATE pickup_requests SET status = 'Fully Cancelled' WHERE id = ?");
                             $stmt->bind_param("i", $request_id);
                             if ($stmt->execute()) {
-                                $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup request deleted successfully.</p></div>';
+                                $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup fully cancelled successfully!</p></div>';
                             } else {
-                                $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Error deleting request.</p></div>';
+                                $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to cancel pickup. ' . $con->error . '</p></div>';
                             }
                             $stmt->close();
                         }
                     }
 
-                    // --- Fetch Refused Pickup Requests with contact info and no date limitations ---
-                    $refusedRequests = [];
-                    // This query fetches ALL refused pickups, ordered by creation date, with no date-based filtering.
-                    $query = "SELECT
-                                pr.*,
-                                u_req.name AS requester_name,
-                                u_req.contact_number AS requester_contact,
-                                u_col.name AS collector_name,
-                                u_col.contact_number AS collector_contact
-                              FROM pickup_requests pr
-                              JOIN users u_req ON pr.user_id = u_req.id
-                              LEFT JOIN users u_col ON pr.assigned_collector_id = u_col.id
-                              WHERE pr.status = 'Refused'
-                              ORDER BY pr.created_at DESC";
+                    $refusedPickups = [];
+                    // The SQL query to retrieve all refused pickups, including requester name, phone, and collector name.
+                    $query = "
+                        SELECT pr.*, u.name AS requester_name, u.phone AS requester_phone, c.name AS collector_name, c.phone AS collector_phone
+                        FROM pickup_requests pr
+                        JOIN users u ON pr.user_id = u.id
+                        LEFT JOIN users c ON pr.assigned_collector_id = c.id
+                        WHERE pr.status = 'Refused'
+                        ORDER BY pr.created_at DESC
+                    ";
+                    
+                    // Attempt to execute the query. If it fails, display the exact database error.
                     $result = $con->query($query);
                     if ($result) {
-                        $refusedRequests = $result->fetch_all(MYSQLI_ASSOC);
+                        $refusedPickups = $result->fetch_all(MYSQLI_ASSOC);
                     } else {
-                         echo '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Database Error:</p><p class="text-sm">Failed to retrieve refused pickups. Please check the query and table structure.</p></div>';
+                        echo '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Database Error:</p><p class="text-sm">Failed to retrieve refused pickups. Please check the query and table structure. MySQL Error: ' . htmlspecialchars($con->error) . '</p></div>';
                     }
                     ?>
                     <h2 class="text-4xl font-bold text-gray-800 mb-8">Refused Pickups</h2>
@@ -694,147 +861,126 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">#</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester (Contact)</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector (Contact)</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Pickup Date</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester Contact</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Date Refused</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <?php if (!empty($refusedRequests)): ?>
+                                    <?php if (!empty($refusedPickups)): ?>
                                         <?php $count = 1; ?>
-                                        <?php foreach ($refusedRequests as $request): ?>
+                                        <?php foreach ($refusedPickups as $pickup): ?>
                                             <tr>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                    <?= htmlspecialchars($request['requester_name']); ?><br>
-                                                    <span class="text-sm text-gray-500"><?= htmlspecialchars($request['requester_contact']); ?></span>
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                    <?= htmlspecialchars($request['collector_name']); ?><br>
-                                                    <span class="text-sm text-gray-500"><?= htmlspecialchars($request['collector_contact']); ?></span>
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900 capitalize"><?= htmlspecialchars($request['waste_type']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['pickup_date']); ?></td>
-                                                <td class="px-6 py-4 text-lg text-gray-900 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap"><?= htmlspecialchars($request['refused_reason']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                    <form method="POST" action="?page=refused_pickups" class="flex flex-col gap-2">
-                                                        <input type="hidden" name="request_id" value="<?= $request['id']; ?>">
-                                                        <select name="new_collector_id" class="block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-base">
-                                                            <option value="0">-- Select New Collector --</option>
-                                                            <?php foreach ($collectorOptions as $id => $name): ?>
-                                                                <option value="<?= $id; ?>"><?= htmlspecialchars($name); ?></option>
-                                                            <?php endforeach; ?>
-                                                        </select>
-                                                        <button type="submit" name="re_assign" class="bg-purple-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors shadow-lg">Re-Assign</button>
-                                                        <button type="button" onclick="showDeleteModal(<?= $request['id']; ?>)" class="bg-red-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors shadow-lg">Delete</button>
-                                                    </form>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_name']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_phone']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['collector_name'] ?? 'N/A'); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['collector_phone'] ?? 'N/A'); ?></td>
+                                                <td class="px-6 py-4 whitespace-normal text-lg text-gray-900"><?= htmlspecialchars($pickup['refusal_reason'] ?? 'N/A'); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-500"><?= date('Y-m-d', strtotime($pickup['created_at'])); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                    <div class="flex items-center space-x-2">
+                                                        <!-- Reassign Section -->
+                                                        <form method="post" action="?page=refused_pickups" class="inline-block flex items-center space-x-2">
+                                                            <input type="hidden" name="request_id" value="<?= $pickup['id']; ?>">
+                                                            <select name="new_collector_id" required class="rounded-xl border-gray-300 text-sm">
+                                                                <option value="">Reassign</option>
+                                                                <?php foreach ($collectorOptions as $id => $name): ?>
+                                                                    <option value="<?= $id; ?>"><?= htmlspecialchars($name); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                            <button type="submit" name="reassign_pickup" class="bg-blue-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-blue-700 transition-colors shadow-md">Go</button>
+                                                        </form>
+                                                        
+                                                        <!-- Cancel Button -->
+                                                        <button type="button" onclick="showCancelModal(<?= $pickup['id']; ?>)" class="bg-red-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-red-700 transition-colors shadow-md">Cancel</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No refused pickups found.</td></tr>
+                                        <tr>
+                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No refused pickups found.</td>
+                                        </tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- Delete Confirmation Modal for Refused Pickups -->
-                    <div id="deleteRefusedModal" class="hidden fixed inset-0 z-50 overflow-auto modal-overlay flex items-center justify-center">
+                    <!-- Cancel Confirmation Modal -->
+                    <div id="cancelModal" class="hidden fixed inset-0 z-50 overflow-auto modal-overlay flex items-center justify-center">
                         <div class="bg-white rounded-2xl p-8 max-w-sm mx-auto shadow-2xl transform transition-all duration-300">
                             <div class="text-center">
-                                <h3 class="text-2xl font-semibold text-gray-800 mb-4">Confirm Deletion</h3>
-                                <p class="text-gray-600 mb-6">Are you sure you want to delete this pickup request? This action cannot be undone.</p>
+                                <h3 class="text-2xl font-semibold text-gray-800 mb-4">Confirm Cancellation</h3>
+                                <p class="text-gray-600 mb-6">Are you sure you want to fully cancel this pickup? This will remove it from the system and cannot be undone.</p>
                                 <div class="flex justify-center space-x-4">
-                                    <button type="button" onclick="hideDeleteModal()" class="bg-gray-300 text-gray-800 py-2 px-6 rounded-xl hover:bg-gray-400 transition-colors shadow-sm">Cancel</button>
-                                    <form method="POST" action="?page=refused_pickups" id="deleteForm" style="display:inline;">
-                                        <input type="hidden" name="delete_pickup" value="1">
-                                        <input type="hidden" id="pickup_id_to_delete" name="request_id" value="">
-                                        <button type="submit" class="bg-red-600 text-white py-2 px-6 rounded-xl hover:bg-red-700 transition-colors shadow-sm">Delete</button>
+                                    <button type="button" onclick="hideCancelModal()" class="bg-gray-300 text-gray-800 py-2 px-6 rounded-xl hover:bg-gray-400 transition-colors shadow-sm">Cancel</button>
+                                    <form id="cancelForm" method="post" action="?page=refused_pickups" class="inline-block">
+                                        <input type="hidden" name="request_id" id="cancelRequestId">
+                                        <button type="submit" name="cancel_pickup" class="bg-red-600 text-white py-2 px-6 rounded-xl hover:bg-red-700 transition-colors shadow-sm">Confirm</button>
                                     </form>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    
                     <script>
-                        // Functions for the refused pickups modal
-                        function showDeleteModal(id) {
-                            const modal = document.getElementById('deleteRefusedModal');
-                            document.getElementById('pickup_id_to_delete').value = id;
+                        // Functions for the cancel pickup modal
+                        function showCancelModal(id) {
+                            const modal = document.getElementById('cancelModal');
+                            const requestIdInput = document.getElementById('cancelRequestId');
+                            requestIdInput.value = id;
                             modal.classList.remove('hidden');
                         }
-                        function hideDeleteModal() {
-                            const modal = document.getElementById('deleteRefusedModal');
+                        function hideCancelModal() {
+                            const modal = document.getElementById('cancelModal');
                             modal.classList.add('hidden');
                         }
                     </script>
-
-                    <?php
-                    break;
-                case 'routes':
-                    // --- Collection Routes content ---
-                    $pickupsResult = $con->query("SELECT pr.id, pr.status, pr.pickup_date, u.name AS user_name, pr.address FROM pickup_requests pr JOIN users u ON pr.user_id = u.id ORDER BY pr.pickup_date DESC");
-                    $pickups = ($pickupsResult) ? $pickupsResult->fetch_all(MYSQLI_ASSOC) : [];
-                    ?>
-                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Collection Routes</h2>
-                    <div class="bg-white rounded-2xl shadow-lg p-6">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Request ID</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">User Name</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Address</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <?php foreach ($pickups as $pickup): ?>
-                                        <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?php echo $pickup['id']; ?></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?php echo htmlspecialchars($pickup['user_name']); ?></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?php echo htmlspecialchars($pickup['address']); ?></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?php echo date('Y-m-d', strtotime($pickup['pickup_date'])); ?></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                <span class="px-2 inline-flex text-base leading-5 font-semibold rounded-full <?php echo ($pickup['status'] === 'Collected' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'); ?>">
-                                                    <?php echo $pickup['status']; ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                     <?php
                     break;
                 case 'reports':
-                    // --- Reports & Analytics content ---
-                    $reportsResult = $con->query("SELECT pr.waste_type, SUM(pr.total_cost) AS total_revenue FROM pickup_requests pr WHERE pr.status = 'Collected' GROUP BY pr.waste_type");
-                    $reports = ($reportsResult) ? $reportsResult->fetch_all(MYSQLI_ASSOC) : [];
+                    // --- Reports content ---
+                    // This section is a placeholder for future report generation logic.
+                    // For example, you could show charts of total waste collected by month or collector performance.
+                    $reportData = [];
+                    $query = "SELECT pr.waste_type, SUM(pr.final_weight) as total_weight, COUNT(*) as total_pickups FROM pickup_requests pr WHERE pr.status = 'Completed' GROUP BY pr.waste_type";
+                    $result = $con->query($query);
+                    if ($result) {
+                        $reportData = $result->fetch_all(MYSQLI_ASSOC);
+                    }
                     ?>
-                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Reports & Analytics</h2>
+                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Reports</h2>
                     <div class="bg-white rounded-2xl shadow-lg p-6">
-                        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Revenue by Waste Type</h3>
+                        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Completed Pickups by Waste Type</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Weight (kg)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Pickups</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <?php foreach ($reports as $report): ?>
+                                    <?php if (!empty($reportData)): ?>
+                                        <?php foreach ($reportData as $data): ?>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900 capitalize"><?= htmlspecialchars($data['waste_type']); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= number_format($data['total_weight'], 2); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $data['total_pickups']; ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
                                         <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900 capitalize"><?php echo htmlspecialchars($report['waste_type']); ?></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">$<?php echo number_format($report['total_revenue'], 2); ?></td>
+                                            <td colspan="3" class="px-6 py-4 text-center text-gray-500">No completed pickups found to generate a report.</td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -842,15 +988,13 @@
                     <?php
                     break;
                 default:
-                    echo '<h2 class="text-4xl font-bold text-gray-800 mb-6">Page Not Found</h2>';
-                    break;
+                    echo '<p class="text-gray-500">Page not found.</p>';
             }
+
+            // Close the database connection at the end of the script
+            $con->close();
             ?>
         </div>
     </div>
-    <?php
-    // Include the footer file from the 'include' directory.
-    include_once 'include/footer.php';
-    ?>
 </body>
 </html>

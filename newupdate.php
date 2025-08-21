@@ -578,39 +578,50 @@
                     <?php
                     break;
                 case 'verify_pickups':
-                    // --- Handle Complete Action ---
+                    // --- Handle Update Action ---
                     $message = '';
-                    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_pickup'])) {
+                    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_pickup_details'])) {
                         $request_id = intval($_POST['request_id']);
-                        $status = 'Completed';
+                        $new_final_weight = floatval($_POST['final_weight']);
+                        $new_2rstatus = $_POST['2rstatus'];
+                        $new_status = 'Completed'; // Hardcoded to 'Completed' as per the user's request.
 
-                        $stmt = $con->prepare("UPDATE pickup_requests SET status = ? WHERE id = ? AND status = 'Approved'");
-                        $stmt->bind_param("si", $status, $request_id);
+                        // Calculate total_cost based on the new final_weight and waste rate
+                        $rateResult = $con->query("SELECT wr.rate_per_kg FROM pickup_requests pr JOIN waste_rates wr ON pr.waste_type = wr.waste_type WHERE pr.id = $request_id");
+                        $total_cost = 0;
+                        if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
+                            $rate_per_kg = $rateRow['rate_per_kg'];
+                            $total_cost = $new_final_weight * $rate_per_kg;
+                        }
+
+                        // Update the pickup record
+                        $stmt = $con->prepare("UPDATE pickup_requests SET final_weight = ?, total_cost = ?, status = ?, 2rstatus = ? WHERE id = ?");
+                        $stmt->bind_param("ddssi", $new_final_weight, $total_cost, $new_status, $new_2rstatus, $request_id);
                         if ($stmt->execute()) {
-                            $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup status updated successfully!</p></div>';
+                            $message = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Success:</p><p class="text-sm">Pickup details updated successfully!</p></div>';
                         } else {
-                            $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to update pickup status. Please try again.</p></div>';
+                            $message = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to update pickup details. Please try again. ' . $con->error . '</p></div>';
                         }
                         $stmt->close();
                     }
 
-                    // --- Fetch Approved Pickups ---
-                    $approvedPickups = [];
-                    // Corrected query to get both requester and collector names, and requester phone
+                    // --- Fetch Pickups to Verify ---
+                    $pickupsToVerify = [];
+                    // The query now only selects pickups with status 'Collected' for admin verification.
                     $query = "
                         SELECT pr.*, u.name AS requester_name, u.phone AS requester_phone, c.name AS collector_name
                         FROM pickup_requests pr
                         JOIN users u ON pr.user_id = u.id
                         LEFT JOIN users c ON pr.assigned_collector_id = c.id
-                        WHERE pr.status = 'Approved'
+                        WHERE pr.status = 'Collected'
                         ORDER BY pr.pickup_date ASC
                     ";
                     $result = $con->query($query);
                     if ($result) {
-                        $approvedPickups = $result->fetch_all(MYSQLI_ASSOC);
+                        $pickupsToVerify = $result->fetch_all(MYSQLI_ASSOC);
                     }
                     ?>
-                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Verify Pickups (Approved)</h2>
+                    <h2 class="text-4xl font-bold text-gray-800 mb-8">Verify Pickups</h2>
                     <?php echo $message; ?>
                     <div class="bg-white rounded-2xl shadow-lg p-6">
                         <div class="overflow-x-auto">
@@ -621,31 +632,47 @@
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Requester</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Est. Weight (kg)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Final Weight (kg)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Cost ($)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">2R Status</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <?php if (!empty($approvedPickups)): ?>
+                                    <?php if (!empty($pickupsToVerify)): ?>
                                         <?php $count = 1; ?>
-                                        <?php foreach ($approvedPickups as $pickup): ?>
+                                        <?php foreach ($pickupsToVerify as $pickup): ?>
                                             <tr>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_name']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_phone']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['collector_name'] ?? 'N/A'); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['final_weight']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg">
-                                                    <form method="post" action="?page=verify_pickups" class="inline-block">
-                                                        <input type="hidden" name="request_id" value="<?= $pickup['id']; ?>">
-                                                        <button type="submit" name="complete_pickup" class="bg-blue-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-blue-700 transition-colors shadow-md">Complete</button>
-                                                    </form>
-                                                </td>
+                                                <form method="post" action="?page=verify_pickups">
+                                                    <input type="hidden" name="request_id" value="<?= $pickup['id']; ?>">
+                                                    <input type="hidden" name="update_pickup_details" value="1">
+                                                    
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= $count++; ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_name']); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['requester_phone']); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($pickup['collector_name'] ?? 'N/A'); ?></td>
+                                                    
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <input type="number" step="0.01" name="final_weight" value="<?= htmlspecialchars($pickup['final_weight']); ?>" class="w-24 rounded-xl border-gray-300 shadow-sm text-sm" required>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
+                                                        $<?= number_format($pickup['total_cost'], 2); ?>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <select name="2rstatus" class="rounded-xl border-gray-300 text-sm">
+                                                            <option value="Reuse" <?= ($pickup['2Rstatus'] == 'Reuse' ? 'selected' : ''); ?>>Reuse</option>
+                                                            <option value="Recycle" <?= ($pickup['2Rstatus'] == 'Recycle' ? 'selected' : ''); ?>>Recycle</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-lg">
+                                                        <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-blue-700 transition-colors shadow-md">Update</button>
+                                                    </td>
+                                                </form>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="px-6 py-4 text-center text-gray-500">No approved pickups to verify.</td>
+                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No pickups to verify.</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
