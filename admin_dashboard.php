@@ -279,7 +279,7 @@ if (!$is_admin) {
             background-color: rgba(0, 0, 0, 0.5);
         }
     </style>
-</head>
+</head><?php include 'include/header.php'; ?>
 <body class="bg-gray-100 font-sans">
     <?php if (!$is_admin): ?>
         <div class="bg-gray-100 min-h-screen flex items-center justify-center">
@@ -1051,7 +1051,7 @@ if (!$is_admin) {
         </div>
         </div>
     <?php endif; ?>
-</body>
+</body> <?php include 'include/footer.php'; ?>
 </html>
 <?php
 // Close the database connection at the end of the script
