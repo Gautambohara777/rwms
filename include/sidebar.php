@@ -79,19 +79,12 @@ $userRole = $_SESSION['user_role'] ?? 'guest';
 <div id="sidebar" class="sidebar">
     <?php if ($userRole === 'admin'): ?>
         <a href="admin_dashboard.php">Admin Dashboard</a>
-        <a href="change_role.php">Manage Users</a>
-        <a href="admin_pickups.php">pickup staus</a>
-        <a href="rate.php">Update Rates</a>
-
+      
 
     <?php elseif ($userRole === 'collector'): ?>
         <a href="pickup_schedule.php">Pickup Schedule</a>
         <a href="colldash.php">Collected Items</a>
 
-        
-    <?php elseif ($userRole === 'buyer'): ?>
-        <a href="browse_scrap.php">Browse Scrap</a>
-        <a href="purchase_history.php">Purchase History</a>
 
 
     <?php elseif ($userRole === 'user'): ?>

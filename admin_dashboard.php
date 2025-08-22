@@ -1051,7 +1051,8 @@ if (!$is_admin) {
         </div>
         </div>
     <?php endif; ?>
-</body> <?php include 'include/footer.php'; ?>
+</body>
+<?php include 'include/footer.php'; ?>
 </html>
 <?php
 // Close the database connection at the end of the script

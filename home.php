@@ -1,6 +1,13 @@
 <?php
 include "connect.php";
 
+// Start the session to access user data
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+// Get the user's role and check if they are logged in
+$user = $_SESSION['user'] ?? null;
+$userRole = $user['user_role'] ?? 'guest';
+
 // Fetch waste rate data
 $wasteRates = [];
 $result = $con->query("SELECT * FROM waste_rates ORDER BY updated_at DESC");
@@ -8,6 +15,14 @@ if ($result) {
     while ($row = $result->fetch_assoc()) {
         $wasteRates[] = $row;
     }
+}
+
+// Define the dashboard link based on the user's role
+$dashboardLink = '';
+if ($userRole === 'admin') {
+    $dashboardLink = 'admin_dashboard.php';
+} elseif ($userRole === 'collector') {
+    $dashboardLink = 'collector_dashboard.php';
 }
 ?>
 <!DOCTYPE html>
@@ -23,23 +38,22 @@ if ($result) {
         }
 
         .video-section {
-    position: relative;
-    width: 100%;
-    height: 85vh; /* Adjust height */
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-    background-color: black; /* Optional to mask any blank area */
-}
+            position: relative;
+            width: 100%;
+            height: 85vh;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            background-color: black;
+        }
 
-.video-section video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top center;
-    display: block;
-}
-
+        .video-section video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top center;
+            display: block;
+        }
 
         .right-overlay {
             position: absolute;
@@ -90,6 +104,20 @@ if ($result) {
             margin: 20px 0 10px;
             text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
         }
+        
+        /* New dashboard button styles */
+        .dashboard-button {
+            background-color: #1a5223; /* A darker shade of green */
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
 
         .start-button, .option-button {
             background-color: #2e7d32;
@@ -136,15 +164,12 @@ if ($result) {
         <?php include 'include/sidebar.php'; ?>
 
         <div class="video-section">
-            <!-- Background Video -->
             <video autoplay muted loop playsinline>
                 <source src="img/intro.mp4" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
 
-            <!-- Overlay on Right -->
             <div class="right-overlay">
-                <!-- Waste Rates -->
                 <div class="rate-panel">
                     <h3>Current Waste Rates</h3>
                     <table border="1">
@@ -169,8 +194,13 @@ if ($result) {
                         </tbody>
                     </table>
                 </div>
+                
+                <?php if (!empty($dashboardLink)): ?>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <a href="<?php echo $dashboardLink; ?>" class="dashboard-button">Go to Dashboard</a>
+                    </div>
+                <?php endif; ?>
 
-                <!-- Recycle Message + Start Button -->
                 <div class="recycle-text">♻ Recycle Waste, Save Earth 🌍</div>
                 <div class="start-button-container">
                     <button class="start-button" id="startBtn" onclick="revealOptions()">Start Now</button>

@@ -1,94 +1,169 @@
 <?php
 // header.php
 if (session_status() === PHP_SESSION_NONE) session_start();
-$userRole = $_SESSION['user_role'] ?? 'guest';
 
-// Project base URL for images & assets
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+
+// Detect role & username safely
+if (isset($_SESSION['user']) && is_array($_SESSION['user'])) {
+    // Case 1: user stored as array
+    $userRole = $_SESSION['user']['user_role'] ?? 'guest';
+    $userName = $_SESSION['user']['username'] ?? '';
+} else {
+    // Case 2: stored separately
+    $userRole = $_SESSION['user_role'] ?? 'guest';
+    $userName = $_SESSION['username'] ?? '';
+}
+
+// Determine home link
+switch ($userRole) {
+    case 'admin':
+        $homeLink = $basePath . '/admin_dashboard.php';
+        break;
+    case 'collector':
+        $homeLink = $basePath . '/collector_dashboard.php';
+        break;
+    case 'user':
+        $homeLink = $basePath . '/home.php';
+        break;
+    default:
+        $homeLink = $basePath . '/home.php';
+        break;
+}
 ?>
+
 <style>
-    html, body {
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+    :root {
+        --primary-color: #2e7d32;
+        --secondary-color: #4CAF50;
+        --accent-color: #a8e063;
+        --text-color-light: #ffffff;
+        --text-color-dark: #333;
+        --font-family-poppins: 'Poppins', sans-serif;
+    }
+
+    body {
+        font-family: var(--font-family-poppins);
         margin: 0;
         padding: 0;
-        min-height: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
     }
 
     .main-header {
-        background-color: #2e7d32;
-        color: white;
-        padding: 1px 50px;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: var(--text-color-light);
+        padding: 10px 50px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         flex-shrink: 0;
     }
 
-    .main-header .logo {
+    .main-header .logo-container {
         display: flex;
         align-items: center;
-        cursor: pointer;
         text-decoration: none;
+        transition: transform 0.3s ease;
     }
 
-    .main-header .logo img {
+    .main-header .logo-container:hover {
+        transform: scale(1.05);
+    }
+
+    .main-header .logo-img {
         height: 60px;
-        margin-left: 20px;
-        margin-right: 10px;
+        margin-right: 15px;
     }
 
     .company-name {
-        font-size: 28px;
-        font-weight: bold;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #ffffff;
-        letter-spacing: 1px;
-        background: linear-gradient(to right, #a8e063, #56ab2f);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-color-light);
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .main-header nav {
+        display: flex;
+        align-items: center;
     }
 
     .main-header nav a {
-        color: white;
+        color: var(--text-color-light);
         text-decoration: none;
         margin-left: 25px;
-        font-weight: 400;
-        font-size: 16px;
+        font-weight: 600;
+        font-size: 1rem;
+        position: relative;
+        transition: color 0.3s ease;
+    }
+
+    .main-header nav a::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -5px;
+        width: 100%;
+        height: 2px;
+        background-color: var(--accent-color);
+        transform: scaleX(0);
+        transition: transform 0.3s ease;
     }
 
     .main-header nav a:hover {
-        text-decoration: underline;
+        color: var(--accent-color);
     }
 
-    /* Content wrapper to push footer down */
+    .main-header nav a:hover::after {
+        transform: scaleX(1);
+    }
+
+    .nav-username {
+        font-weight: 600;
+        margin-right: 15px;
+        color: var(--accent-color);
+    }
+
     .content {
         flex: 1;
         padding: 20px;
     }
 
     footer {
-        background: #2e7d32;
-        color: white;
+        background: var(--primary-color);
+        color: var(--text-color-light);
         text-align: center;
-        padding: 10px;
+        padding: 15px;
         flex-shrink: 0;
     }
 </style>
 
 <header class="main-header">
-    <div style="display:flex; align-items:center;">
-        <!-- Logo + Company Name -->
-        <a href="<?php echo $basePath; ?>/home.php" class="logo" title="RecycleHub Home">
-            <img src="<?php echo $basePath; ?>/img/logo.png" alt="RecycleHub Logo" />
+    <div class="logo-container">
+        <a href="<?php echo $homeLink; ?>" title="RecycleHub Home" class="logo-link" style="display: flex; align-items: center;">
+            <img src="<?php echo $basePath; ?>/img/logo.png" alt="RecycleHub Logo" class="logo-img" />
             <span class="company-name">RecycleHub</span>
         </a>
     </div>
 
     <nav>
-        <a href="<?php echo $basePath; ?>/home.php">Home</a>
-        <a href="<?php echo $basePath; ?>/rates.php">Rates</a>
-        <?php if (isset($_SESSION['user'])): ?>
+        <?php if ($userName): ?>
+            <span class="nav-username">Hello, <?php echo htmlspecialchars($userName); ?>!</span>
+        <?php endif; ?>
+
+        <a href="<?php echo $homeLink; ?>">Home</a>
+
+        <?php if ($userRole === 'user'): ?>
+            <a href="<?php echo $basePath; ?>/sell.php">Request Pickup</a>
+            <a href="<?php echo $basePath; ?>/pickup_history.php">My Requests</a>
+            
+        <?php endif; ?>
+
+        <?php if ($userRole !== 'guest'): ?>
             <a href="<?php echo $basePath; ?>/logout.php">Logout</a>
         <?php else: ?>
             <a href="<?php echo $basePath; ?>/login.php">Login</a>
