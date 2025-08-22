@@ -837,100 +837,173 @@ if (!$is_admin) {
                     <?php
                     break;
                 case 'reusable_waste':
-                    $reusableListings = [];
-                    $listingsResult = $con->query("SELECT * FROM reusable_waste_listings ORDER BY created_at DESC");
-                    if ($listingsResult) {
-                        $reusableListings = $listingsResult->fetch_all(MYSQLI_ASSOC);
+            // The Reusable Waste section handles adding, updating, and deleting listings.
+            // It also displays all current listings for the admin to manage.
+            
+            // Handle Add New Listing
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_listing'])) {
+                $title = $_POST['title'] ?? '';
+                $description = $_POST['description'] ?? '';
+                $quantity = (int)($_POST['quantity'] ?? 0);
+                $price = (float)($_POST['price'] ?? 0);
+                $status = "available";
+                $user_id = $_SESSION['user_id'] ?? 1; // Use the actual session user ID
+
+                if (isset($_FILES["image"]) && $_FILES["image"]["error"] == 0) {
+                    $targetDir = "uploads/reusable/";
+                    if (!is_dir($targetDir)) {
+                        mkdir($targetDir, 0777, true);
                     }
-                    ?>
-                    <h2 class="text-4xl font-bold text-gray-800 mb-8">List Reusable Waste</h2>
-                    <div class="flex flex-col lg:flex-row gap-8">
-                        <div class="w-full lg:w-1/3 bg-white rounded-2xl shadow-lg p-6 mb-6">
-                            <h3 class="text-2xl font-semibold text-gray-800 mb-4">Add New Reusable Product</h3>
-                            <form action="?page=reusable_waste" method="post" enctype="multipart/form-data">
-                                <input type="hidden" name="list_reusable_waste" value="1">
-                                <div class="mb-4">
-                                    <label for="title" class="block text-lg font-medium text-gray-700">Title</label>
-                                    <input type="text" id="title" name="title" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
-                                </div>
-                                <div class="mb-4">
-                                    <label for="description" class="block text-lg font-medium text-gray-700">Description</label>
-                                    <textarea id="description" name="description" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg"></textarea>
-                                </div>
-                                <div class="mb-4">
-                                    <label for="quantity" class="block text-lg font-medium text-gray-700">Quantity</label>
-                                    <input type="number" id="quantity" name="quantity" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
-                                </div>
-                                <div class="mb-4">
-                                    <label for="price" class="block text-lg font-medium text-gray-700">Price ($)</label>
-                                    <input type="number" step="0.01" id="price" name="price" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
-                                </div>
-                                <div class="mb-4">
-                                    <label for="image" class="block text-lg font-medium text-gray-700">Upload Image</label>
-                                    <input type="file" id="image" name="image" accept="image/*" required class="mt-1 block w-full text-lg text-gray-900 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400">
-                                </div>
-                                <div>
-                                    <button type="submit" class="w-full bg-green-600 text-white py-3 px-4 rounded-xl text-lg font-semibold hover:bg-green-700 transition-colors shadow-lg">Save Product</button>
-                                </div>
-                            </form>
+
+                    $fileName = time() . "_" . basename($_FILES["image"]["name"]);
+                    $targetFilePath = $targetDir . $fileName;
+
+                    if (move_uploaded_file($_FILES["image"]["tmp_name"], $targetFilePath)) {
+                        $stmt = $con->prepare("INSERT INTO reusable_waste_listings (title, description, quantity, price, image, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->bind_param("sssdssi", $title, $description, $quantity, $price, $targetFilePath, $status, $user_id);
+                        
+                        if ($stmt->execute()) {
+                            $message = "✅ Listing added successfully!";
+                        } else {
+                            $message = "❌ Database insertion failed: " . $stmt->error;
+                        }
+                        $stmt->close();
+                    } else {
+                        $message = "❌ File upload failed.";
+                    }
+                } else {
+                    $message = "❌ No image uploaded or file error.";
+                }
+            }
+
+            // Handle Delete Listing
+            if (isset($_GET['delete'])) {
+                $id = (int)$_GET['delete'];
+                
+                $stmt = $con->prepare("SELECT image FROM reusable_waste_listings WHERE listing_id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($row = $result->fetch_assoc()) {
+                    if (file_exists($row['image'])) {
+                        unlink($row['image']); // Delete the image file
+                    }
+                }
+                $stmt->close();
+                
+                $stmt = $con->prepare("DELETE FROM reusable_waste_listings WHERE listing_id = ?");
+                $stmt->bind_param("i", $id);
+                if ($stmt->execute()) {
+                    $message = "🗑️ Listing deleted successfully.";
+                } else {
+                    $message = "❌ Deletion failed.";
+                }
+                $stmt->close();
+            }
+            
+            // Handle Update Listing Status
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
+                $listing_id = (int)$_POST['listing_id'];
+                $status_value = $_POST['status_value'];
+                
+                $stmt = $con->prepare("UPDATE reusable_waste_listings SET status = ? WHERE listing_id = ?");
+                $stmt->bind_param("si", $status_value, $listing_id);
+                
+                if ($stmt->execute()) {
+                    $message = "✏️ Listing status updated successfully.";
+                } else {
+                    $message = "❌ Status update failed.";
+                }
+                $stmt->close();
+            }
+
+            // Fetch all listings for display
+            $result = $con->query("SELECT * FROM reusable_waste_listings ORDER BY listing_id DESC");
+            ?>
+            <h2 class="text-3xl font-semibold text-gray-800 mb-6">Manage Reusable Waste</h2>
+            
+            <div class="flex flex-col lg:flex-row gap-8">
+                <div class="lg:w-1/2 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-2xl font-medium text-gray-700 mb-4">Current Listings</h3>
+                    <?php if ($result && $result->num_rows > 0): ?>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php while ($row = $result->fetch_assoc()): ?>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap"><img src="<?= htmlspecialchars($row['image']) ?>" alt="Listing Image" class="h-12 w-12 object-cover rounded"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($row['title']) ?></td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><?= $row['quantity'] ?></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">$<?= $row['price'] ?></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <form action="admin_dashboard.php?page=reusable_waste" method="post">
+                                            <input type="hidden" name="update_status" value="1">
+                                            <input type="hidden" name="listing_id" value="<?= $row['listing_id'] ?>">
+                                            <select name="status_value" onchange="this.form.submit()" class="block w-full border border-gray-300 rounded-md shadow-sm p-1">
+                                                <option value="available" <?= ($row['status'] == 'available') ? 'selected' : ''; ?>>Available</option>
+                                                <option value="sold" <?= ($row['status'] == 'sold') ? 'selected' : ''; ?>>Sold</option>
+                                                <option value="removed" <?= ($row['status'] == 'removed') ? 'selected' : ''; ?>>Removed</option>
+                                            </select>
+                                        </form>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <a href="admin_dashboard.php?page=reusable_waste&delete=<?= $row['listing_id'] ?>" 
+                                        onclick="return confirm('Are you sure you want to delete this listing?');" 
+                                        class="text-red-600 hover:text-red-900">Delete</a>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php else: ?>
+                    <p class="text-gray-500">No reusable waste listings found.</p>
+                    <?php endif; ?>
+                </div>
+                
+                <div class="lg:w-1/2 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-2xl font-medium text-gray-700 mb-4">Add New Listing</h3>
+                    <form action="admin_dashboard.php?page=reusable_waste" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="add_listing" value="1">
+                        <div class="mb-4">
+                            <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                            <input type="text" id="title" name="title" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
                         </div>
-                        <div class="w-full lg:w-2/3 bg-white rounded-2xl shadow-lg p-6">
-                            <h3 class="text-2xl font-semibold text-gray-800 mb-4">Current Reusable Listings</h3>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Image</th>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                            <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                        <?php if (!empty($reusableListings)): ?>
-                                            <?php foreach ($reusableListings as $item): ?>
-                                                <tr>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($item['title']); ?></td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                        <?php if (!empty($item['image'])): ?>
-                                                            <img src="<?= htmlspecialchars($item['image']); ?>" alt="Product Image" class="h-16 w-16 object-cover rounded-xl shadow-md">
-                                                        <?php else: ?>
-                                                            N/A
-                                                        <?php endif; ?>
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($item['quantity']); ?></td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">$<?= number_format($item['price'], 2); ?></td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                        <form method="post" action="?page=reusable_waste" class="flex items-center space-x-2">
-                                                            <input type="hidden" name="listing_id" value="<?= $item['id']; ?>">
-                                                            <input type="hidden" name="update_listing" value="1">
-                                                            <select name="status" class="rounded-xl border-gray-300 text-sm">
-                                                                <option value="available" <?= ($item['status'] == 'available' ? 'selected' : ''); ?>>Available</option>
-                                                                <option value="sold" <?= ($item['status'] == 'sold' ? 'selected' : ''); ?>>Sold</option>
-                                                                <option value="removed" <?= ($item['status'] == 'removed' ? 'selected' : ''); ?>>Removed</option>
-                                                            </select>
-                                                            <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-blue-700 transition-colors shadow-md">Update</button>
-                                                        </form>
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                        <a href="?page=reusable_waste&delete_id=<?= $item['id']; ?>" onclick="return confirm('Are you sure you want to delete this listing?')" class="bg-red-600 text-white py-2 px-4 rounded-xl text-sm hover:bg-red-700 transition-colors shadow-md">Delete</a>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php else: ?>
-                                            <tr>
-                                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">No reusable products listed.</td>
-                                            </tr>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
+                        <div class="mb-4">
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                            <textarea id="description" name="description" rows="3" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="quantity" class="block text-sm font-medium text-gray-700">Quantity (pcs)</label>
+                                <input type="number" id="quantity" name="quantity" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                            </div>
+                            <div>
+                                <label for="price" class="block text-sm font-medium text-gray-700">Price ($)</label>
+                                <input type="number" step="0.01" id="price" name="price" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
                             </div>
                         </div>
-                    </div>
-                    <?php
-                    break;
+                        <div class="mb-4">
+                            <label for="image" class="block text-sm font-medium text-gray-700">Upload Image</label>
+                            <input type="file" id="image" name="image" accept="image/*" required class="mt-1 block w-full">
+                        </div>
+                        <button type="submit" class="w-full bg-green-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-600">Save Listing</button>
+                    </form>
+                </div>
+            </div>
+            <?php
+            break;
                 case 'reports':
                     $reportData = [];
                     $query = "SELECT pr.waste_type, SUM(pr.final_weight) as total_weight, COUNT(*) as total_pickups FROM pickup_requests pr WHERE pr.status = 'Completed' GROUP BY pr.waste_type";
