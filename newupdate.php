@@ -292,7 +292,7 @@ if ($result) {
             flex-direction: column;
             margin-left: var(--sidebar-width);
             width: calc(100% - var(--sidebar-width));
-            margin-top: 80px;
+            margin-top: 30px;
             padding: 20px;
         }
         
