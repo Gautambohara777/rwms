@@ -1,3 +1,4 @@
+<!--Algorith used( havershine line 493-497, greedy algorithm 500-506) -->
 <?php
 // newupdate.php
 session_start();
@@ -94,17 +95,37 @@ if ($view === 'inprogress' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_P
     }
 }
 
+// Handle POST request for waste collection update from the Live Route form
+if ($view === 'live-route' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_collected_waste'])) {
+    $id = (int)($_POST['pickup_id'] ?? 0);
+    $collected_items = $_POST['collected_items'];
+    $final_weight = (float)$_POST['final_weight'];
+    $rate = (float)$_POST['rate'];
+    $total_cost = $final_weight * $rate;
+
+    $sql = "UPDATE pickup_requests SET collected_items=?, final_weight=?, rate=?, total_cost=?, status='Collected' WHERE id=? AND `$assignee_col` = ?";
+    $stmt = mysqli_prepare($db, $sql);
+    mysqli_stmt_bind_param($stmt, "sddiii", $collected_items, $final_weight, $rate, $total_cost, $id, $collector_id);
+    if (mysqli_stmt_execute($stmt)) {
+        $message = "Pickup #$id has been updated and marked as 'Collected'.";
+    } else {
+        $message = "Error updating pickup: " . mysqli_error($db);
+    }
+    mysqli_stmt_close($stmt);
+}
+
 // --- Fetch Data for Dashboard Counts
-$counts = [ 'assigned' => 0, 'inprogress' => 0, 'awaiting' => 0, 'completed' => 0 ];
+$counts = [ 'assigned' => 0, 'inprogress' => 0, 'awaiting' => 0, 'completed' => 0, 'refused' => 0, 'total_collected_weight' => 0 ];
 $queries = [
     'assigned' => "AND LOWER(status) NOT IN ('complete', 'in progress', 'collected', 'refused')",
     'inprogress' => "AND LOWER(status) LIKE 'in progress%'",
     'awaiting' => "AND LOWER(status) = 'collected'",
-    'completed' => "AND LOWER(status) LIKE 'complete%'"
+    'completed' => "AND LOWER(status) LIKE 'complete%'",
+    'refused' => "AND LOWER(status) = 'refused'"
 ];
 
-foreach ($counts as $key => $val) {
-    $sql = "SELECT COUNT(*) FROM pickup_requests WHERE assigned_collector_id = ? " . $queries[$key];
+foreach ($queries as $key => $val) {
+    $sql = "SELECT COUNT(*) FROM pickup_requests WHERE assigned_collector_id = ? " . $val;
     $stmt = mysqli_prepare($con, $sql);
     mysqli_stmt_bind_param($stmt, "i", $collector_id);
     mysqli_stmt_execute($stmt);
@@ -113,6 +134,17 @@ foreach ($counts as $key => $val) {
     $counts[$key] = (int) ($count ?? 0);
     mysqli_stmt_close($stmt);
 }
+
+// New query to get total collected weight
+$weight_sql = "SELECT SUM(final_weight) FROM pickup_requests WHERE assigned_collector_id = ? AND (LOWER(status) = 'collected' OR LOWER(status) = 'completed')";
+$stmt = mysqli_prepare($con, $weight_sql);
+mysqli_stmt_bind_param($stmt, "i", $collector_id);
+mysqli_stmt_execute($stmt);
+mysqli_stmt_bind_result($stmt, $total_weight);
+mysqli_stmt_fetch($stmt);
+$counts['total_collected_weight'] = (float) ($total_weight ?? 0);
+mysqli_stmt_close($stmt);
+
 
 // --- Fetch Waste Rates
 $rates = [];
@@ -251,7 +283,7 @@ if ($result) {
         .main-content {
             display: flex;
             flex: 1;
-            gap: 5px;
+            gap: 20px;
             flex-wrap: wrap;
         }
 
@@ -259,7 +291,7 @@ if ($result) {
             flex: 2;
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 20px;
             min-width: 500px;
         }
         
@@ -272,7 +304,7 @@ if ($result) {
         
         .counts {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
         }
 
@@ -287,6 +319,7 @@ if ($result) {
             justify-content: center;
             align-items: center;
             transition: transform 0.2s, box-shadow 0.2s;
+            min-height: 150px;
         }
         
         .card:hover {
@@ -299,6 +332,8 @@ if ($result) {
         .card-inprogress { background-color: #e67e22; }
         .card-awaiting { background-color: #9b59b6; }
         .card-completed { background-color: #2ecc71; }
+        .card-refused { background-color: #e74c3c; }
+        .card-total { background-color: #f39c12; }
         
         .card h3 {
             margin-bottom: 10px;
@@ -518,6 +553,47 @@ if ($result) {
             background: #f9f9f9;
             border-radius: 8px;
         }
+        
+        /* New on-page form styles */
+        .update-form {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+            width: 90%;
+            max-width: 500px;
+        }
+        .update-form input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        .update-form .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
 
         /* Responsive Design */
         @media (max-width: 900px) {
@@ -535,6 +611,9 @@ if ($result) {
             .live-route-container {
                 grid-template-columns: 1fr;
             }
+            .counts {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -550,7 +629,8 @@ if ($result) {
         <li><a href="?view=inprogress" class="<?= $view === 'inprogress' ? 'active' : '' ?>"><i class="fas fa-truck-pickup"></i>In Progress</a></li>
         <li><a href="?view=live-route" class="<?= $view === 'live-route' ? 'active' : '' ?>"><i class="fas fa-map-marked-alt"></i>Live Route</a></li>
         <li><a href="?view=awaiting" class="<?= $view === 'awaiting' ? 'active' : '' ?>"><i class="fas fa-hourglass-half"></i>Awaiting Approval</a></li>
-        <li><a href="?view=history" class="<?= $view === 'history' ? 'active' : '' ?>"><i class="fas fa-history"></i>Completed History</a></li>
+        <li><a href="?view=history" class="<?= $view === 'history' ? 'active' : '' ?>"><i class="fas fa-history"></i>Completed Pickups</a></li>
+        <li><a href="?view=refused" class="<?= $view === 'refused' ? 'active' : '' ?>"><i class="fas fa-ban"></i>Refused Pickups</a></li>
         <li><a href="?view=rates" class="<?= $view === 'rates' ? 'active' : '' ?>"><i class="fas fa-dollar-sign"></i>Waste Rates</a></li>
     </ul>
     <button class="logout-btn" onclick="location.href='logout.php'"><i class="fas fa-sign-out-alt"></i>Log Out</button>
@@ -578,8 +658,16 @@ if ($result) {
                         <h3>Completed Pickups</h3>
                         <p><?php echo $counts['completed']; ?></p>
                     </div>
+                    <div class="card card-refused">
+                        <h3>Refused Pickups</h3>
+                        <p><?php echo $counts['refused']; ?></p>
+                    </div>
+                    <div class="card card-total">
+                        <h3>Total Waste Collected</h3>
+                        <p><?php echo number_format($counts['total_collected_weight'], 2); ?> kg</p>
+                    </div>
                 </div>
-                <button class="start-btn" onclick="location.href='?view=assigned'">Start a Pickup Route</button>
+                <button class="start-btn" onclick="location.href='?view=inprogress'">Start a Pickup Route</button>
             </div>
             
             <div class="map-rates-container">
@@ -597,8 +685,6 @@ if ($result) {
                     <?php endforeach; ?>
                 </div>
 
-                <h3>Your Current Location</h3>
-                <iframe id="mapFrame" title="Your current location"></iframe>
             </div>
             
         <?php elseif ($view === 'assigned'):
@@ -780,6 +866,31 @@ if ($result) {
                     </div>
                 </div>
             </div>
+            
+            <div class="overlay" onclick="hideForm()"></div>
+            <div class="update-form" id="updateForm">
+                <span class="close-btn" onclick="hideForm()">&times;</span>
+                <h2 id="updateFormTitle">Update Pickup</h2>
+                <form method="POST">
+                    <input type="hidden" name="update_collected_waste" value="1">
+                    <input type="hidden" name="pickup_id" id="form-pickup-id">
+                    
+                    <label>Collected Items</label>
+                    <input type="text" name="collected_items" id="form-collected-items" required>
+                    
+                    <label>Final Weight (kg)</label>
+                    <input type="number" step="0.01" name="final_weight" id="form-final-weight" required>
+                    
+                    <label>Rate (per kg)</label>
+                    <input type="number" step="0.01" name="rate" id="form-rate" required>
+                    
+                    <label>Total Cost</label>
+                    <input type="number" step="0.01" id="form-total-cost" name="total_cost_display" readonly>
+                    
+                    <button type="submit" class="btn">Update & Save</button>
+                </form>
+            </div>
+            
 
         <?php elseif ($view === 'awaiting'):
             // Fetch awaiting approval pickups
@@ -836,12 +947,12 @@ if ($result) {
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                    <?php endif; ?>
-                </div>
+                    </div>
+                <?php endif; ?>
             </div>
 
         <?php elseif ($view === 'history'):
-            // Fetch completed history using the user's provided logic
+            // Fetch completed history
             $select_sql = "
                 SELECT pr.id, pr.user_id, u.name AS customer_name,
                        pr.waste_type,
@@ -852,7 +963,7 @@ if ($result) {
                 FROM pickup_requests pr
                 LEFT JOIN users u ON pr.user_id = u.id
                 WHERE pr.`{$assignee_col}` = ?
-                  AND (LOWER(COALESCE(pr.status,'')) IN ('collected', 'completed', 'refused'))
+                  AND LOWER(COALESCE(pr.status,'')) = 'completed'
                 ORDER BY pr.`{$pickup_date_col}` ASC, pr.id ASC
             ";
             $stmt = mysqli_prepare($db, $select_sql);
@@ -868,6 +979,64 @@ if ($result) {
                 <h1>Completed Pickups</h1>
                 <?php if (count($rows) === 0): ?>
                     <div class="no-data">No completed pickups found.</div>
+                <?php else: ?>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Customer Name</th>
+                                    <th>Waste Type</th>
+                                    <th>Weight (kg)</th>
+                                    <th>Location</th>
+                                    <th>Pickup Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($rows as $r): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($r['customer_name'] ?? 'Unknown') ?></td>
+                                        <td><?= htmlspecialchars($r['waste_type'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($r['weight'] ?? '-'); ?></td>
+                                        <td><?= htmlspecialchars($r['location'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($r['pickup_date'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($r['status'] ?? '-') ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        
+        <?php elseif ($view === 'refused'):
+            // Fetch refused pickups
+            $select_sql = "
+                SELECT pr.id, pr.user_id, u.name AS customer_name,
+                       pr.waste_type,
+                       pr.`{$weight_col}` AS weight,
+                       pr.`{$address_col}` AS location,
+                       pr.`{$pickup_date_col}` AS pickup_date,
+                       pr.status
+                FROM pickup_requests pr
+                LEFT JOIN users u ON pr.user_id = u.id
+                WHERE pr.`{$assignee_col}` = ?
+                  AND LOWER(COALESCE(pr.status,'')) = 'refused'
+                ORDER BY pr.`{$pickup_date_col}` ASC, pr.id ASC
+            ";
+            $stmt = mysqli_prepare($db, $select_sql);
+            if (!$stmt) die("Prepare failed: " . mysqli_error($db));
+            mysqli_stmt_bind_param($stmt, "i", $collector_id);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $rows = [];
+            while ($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+            mysqli_stmt_close($stmt);
+        ?>
+            <div class="content-body">
+                <h1>Refused Pickups</h1>
+                <?php if (count($rows) === 0): ?>
+                    <div class="no-data">No refused pickups found.</div>
                 <?php else: ?>
                     <div class="table-container">
                         <table>
@@ -1084,11 +1253,11 @@ if ($result) {
         let html='';
         ordered.forEach((p,i)=>{
             let dist = haversine(start.lat,start.lng,p.lat,p.lng).toFixed(2);
-            html+=`<div class="pickup-item">
+            html+=`<div class="pickup-item" data-id="${p.id}" data-items="${p.waste_type}" data-weight="${p.weight}" data-rate="${p.rate}">
                 <strong>${i+1}. ${p.customer_name} (${p.phone})</strong><br>
                 ${p.waste_type} • ${p.weight}kg • Rate: ${p.rate} • ${dist} km<br>
-                <button class="btn" onclick="markCollected(${p.id}, '${p.waste_type}', ${p.weight}, ${p.rate})">Mark Collected</button>
-                <button class="btn secondary" onclick="updatePickup(${p.id})">Update Pickup</button>
+                <button class="btn" onclick="markCollected(${p.id})">Mark as Collected</button>
+                <button class="btn secondary" onclick="showUpdateForm(${p.id})">Update Pickup</button>
             </div>`;
         });
         document.getElementById('list').innerHTML=html;
@@ -1113,35 +1282,72 @@ if ($result) {
         }
     }
 
-    // Functionality from start_pickup.php
-    async function markCollected(id, waste_type, weight, rate){
-        if (!confirm(`Are you sure you want to mark this pickup as 'Collected'?`)) return;
+    // New on-page update form logic
+    function showUpdateForm(id) {
+        const item = document.querySelector(`.pickup-item[data-id='${id}']`);
+        if (!item) return;
+
+        const wasteType = item.getAttribute('data-items');
+        const weight = item.getAttribute('data-weight');
+        const rate = item.getAttribute('data-rate');
+
+        document.getElementById('updateFormTitle').textContent = `Update Pickup #${id}`;
+        document.getElementById('form-pickup-id').value = id;
+        document.getElementById('form-collected-items').value = wasteType;
+        document.getElementById('form-final-weight').value = weight;
+        document.getElementById('form-rate').value = rate;
         
+        calculateTotal();
+
+        document.getElementById('updateForm').style.display = 'block';
+        document.querySelector('.overlay').style.display = 'block';
+    }
+
+    function hideForm() {
+        document.getElementById('updateForm').style.display = 'none';
+        document.querySelector('.overlay').style.display = 'none';
+    }
+    
+    function calculateTotal() {
+        let weight = parseFloat(document.getElementById("form-final-weight").value) || 0;
+        let rate = parseFloat(document.getElementById("form-rate").value) || 0;
         let total = weight * rate;
+        document.getElementById("form-total-cost").value = total.toFixed(2);
+    }
+    
+    document.getElementById("form-final-weight")?.addEventListener("input", calculateTotal);
+    document.getElementById("form-rate")?.addEventListener("input", calculateTotal);
+
+    // Function to mark as collected with a simple confirmation
+    async function markCollected(id){
+        if (!confirm(`Are you sure you want to mark pickup #${id} as 'Collected'?`)) return;
+        
         try{
-            const res = await fetch('collectorupdate_pickupstatus.php', {
+            const item = document.querySelector(`.pickup-item[data-id='${id}']`);
+            const collectedItems = item.getAttribute('data-items');
+            const finalWeight = item.getAttribute('data-weight');
+            const rate = item.getAttribute('data-rate');
+
+            const res = await fetch('newupdate.php', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: new URLSearchParams({
-                    id, 
-                    status: 'Collected',
-                    collected_items: waste_type,
-                    final_weight: weight,
-                    total_cost: total
+                    view: 'live-route',
+                    update_collected_waste: '1',
+                    pickup_id: id,
+                    collected_items: collectedItems,
+                    final_weight: finalWeight,
+                    rate: rate
                 })
             });
             if (res.ok) {
                 location.reload();
             } else {
-                alert('Failed to update pickup status. Please try again.');
+                alert('Failed to mark as collected. Please try again.');
             }
         } catch(e) { 
             alert('Failed to connect to the server.');
         }
-    }
-
-    function updatePickup(id){
-        window.location.href = "collectorupdate_pickup.php?id="+id;
     }
 </script>
 </body>

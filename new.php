@@ -579,7 +579,7 @@ if ($result) {
                         <p><?php echo $counts['completed']; ?></p>
                     </div>
                 </div>
-                <button class="start-btn" onclick="location.href='?view=assigned'">Start a Pickup Route</button>
+                <button class="start-btn" onclick="location.href='?view=inprogress'">Start a Pickup Route</button>
             </div>
             
             <div class="map-rates-container">
@@ -596,9 +596,6 @@ if ($result) {
                         </div>
                     <?php endforeach; ?>
                 </div>
-
-                <h3>Your Current Location</h3>
-                <iframe id="mapFrame" title="Your current location"></iframe>
             </div>
             
         <?php elseif ($view === 'assigned'):
