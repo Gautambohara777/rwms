@@ -31,37 +31,27 @@ switch ($userRole) {
         break;
 }
 ?>
-
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 
     :root {
-        --primary-color: #2e7d32;
-        --secondary-color: #4CAF50;
-        --accent-color: #a8e063;
+        --primary-color: #2C7B43;
+        --secondary-color: #B7E45E;
+        --accent-color: #A0D2DB;
         --text-color-light: #ffffff;
-        --text-color-dark: #333;
+        --text-color-dark: #333333;
         --font-family-poppins: 'Poppins', sans-serif;
     }
 
-    body {
-        font-family: var(--font-family-poppins);
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-    }
-
     .main-header {
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: var(--text-color-light);
-        padding: 10px 50px;
+        background: var(--primary-color);
+        padding: 8px 30px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        flex-shrink: 0;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+        position: relative;
     }
 
     .main-header .logo-container {
@@ -127,21 +117,7 @@ switch ($userRole) {
         margin-right: 15px;
         color: var(--accent-color);
     }
-
-    .content {
-        flex: 1;
-        padding: 20px;
-    }
-
-    footer {
-        background: var(--primary-color);
-        color: var(--text-color-light);
-        text-align: center;
-        padding: 15px;
-        flex-shrink: 0;
-    }
 </style>
-
 <header class="main-header">
     <div class="logo-container">
         <a href="<?php echo $homeLink; ?>" title="RecycleHub Home" class="logo-link" style="display: flex; align-items: center;">
@@ -149,20 +125,15 @@ switch ($userRole) {
             <span class="company-name">RecycleHub</span>
         </a>
     </div>
-
     <nav>
         <?php if ($userName): ?>
             <span class="nav-username">Hello, <?php echo htmlspecialchars($userName); ?>!</span>
         <?php endif; ?>
-
         <a href="<?php echo $homeLink; ?>">Home</a>
-
         <?php if ($userRole === 'user'): ?>
             <a href="<?php echo $basePath; ?>/sell.php">Request Pickup</a>
             <a href="<?php echo $basePath; ?>/pickup_history.php">My Requests</a>
-            
         <?php endif; ?>
-
         <?php if ($userRole !== 'guest'): ?>
             <a href="<?php echo $basePath; ?>/logout.php">Logout</a>
         <?php else: ?>

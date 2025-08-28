@@ -29,199 +29,216 @@ if ($userRole === 'admin') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RecycleHub - Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             font-family: 'Poppins', sans-serif;
-            background: #ffffffff;
-        }
-
-        .video-section {
-            position: relative;
-            width: 100%;
-            height: 85vh;
+            color: #333;
             overflow: hidden;
-            margin: 0;
-            padding: 0;
-            background-color: black;
-        }
-
-        .video-section video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: top center;
-            display: block;
-        }
-
-        .right-overlay {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            width: 350px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 10px;
-            max-height: 90%;
-            overflow-y: auto;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             display: flex;
             flex-direction: column;
-            align-items: center;
+            min-height: 100vh;
         }
 
-        .rate-panel h3 {
+        .video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .video-background video {
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            object-fit: cover;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 0;
+        }
+
+        .rates-card {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            max-width: 300px;
+            width: 70%;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            right: 3%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .rates-card h3 {
+            color: white;
+            font-size: 1.5em;
+            font-weight: 600;
             margin-top: 0;
-            color: #2e7d32;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
         }
 
-        .rate-panel table {
+        .rates-table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 15px;
+            color: white;
         }
 
-        .rate-panel th, .rate-panel td {
-            padding: 8px;
+        .rates-table th, .rates-table td {
+            padding: 12px;
             text-align: left;
-            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
         }
 
-        .rate-panel th {
-            background-color: #e8f5e9;
-            color: #2e7d32;
+        .rates-table th {
+            background-color: rgba(26, 82, 35, 0.4);
+            font-weight: 600;
         }
 
-        .rate-panel {
-            width: 100%;
-        }
-
-        .recycle-text {
-            font-size: 20px;
-            font-weight: bold;
-            color: #2e7d32;
-            text-align: center;
-            margin: 20px 0 10px;
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+        .rates-table tbody tr:last-child td {
+            border-bottom: none;
         }
         
-        /* New dashboard button styles */
-        .dashboard-button {
-            background-color: #1a5223; /* A darker shade of green */
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            font-size: 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
+        .cta-container {
+            position: absolute;
+            bottom: 5vh;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .cta-button {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-radius: 8px;
             text-decoration: none;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            cursor: pointer;
+            border: none;
             display: inline-block;
+            margin: 0 10px;
         }
 
-        .start-button, .option-button {
+        .cta-button.primary {
             background-color: #2e7d32;
             color: white;
-            border: none;
-            padding: 12px 25px;
-            font-size: 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
         }
 
-        .start-button-container {
-            text-align: center;
-            width: 100%;
+        .cta-button.secondary {
+            background-color: #f1f8e9;
+            color: #1a5223;
+            border: 2px solid #2e7d32;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
-        .option-buttons {
+        #options {
             display: none;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 10px;
+            gap: 20px;
         }
 
-        .option-buttons p {
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-
-        @media(max-width: 768px) {
-            .right-overlay {
-                position: static;
-                width: 90%;
-                margin: auto;
-                margin-top: 10px;
-            }
+        .page-title {
+            position: absolute;
+            top: 85%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-shadow: 1px 1px 5px rgba(0,0,0,0.5);
+            font-size: 2.5em;
+            font-weight: 700;
+            z-index: 1;
         }
     </style>
 </head>
 <body>
+    <div class="video-background">
+        <video autoplay muted loop playsinline>
+            <source src="img/intro.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+    
+    <div class="overlay"></div>
+
     <?php include 'include/header.php'; ?>
-
-    <main>
-        <?php include 'include/sidebar.php'; ?>
-
-        <div class="video-section">
-            <video autoplay muted loop playsinline>
-                <source src="img/intro.mp4" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-
-            <div class="right-overlay">
-                <div class="rate-panel">
-                    <h3>Current Waste Rates</h3>
-                    <table border="1">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Rate (NPR/KG)</th>
-                                <th>Updated</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($wasteRates as $rate): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($rate['waste_type']); ?></td>
-                                    <td><?php echo htmlspecialchars($rate['rate_per_kg']); ?></td>
-                                    <td><?php echo htmlspecialchars(date("M d, Y", strtotime($rate['updated_at']))); ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($wasteRates)): ?>
-                                <tr><td colspan="3">No data available.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <?php if (!empty($dashboardLink)): ?>
-                    <div style="text-align: center; margin-top: 15px;">
-                        <a href="<?php echo $dashboardLink; ?>" class="dashboard-button">Go to Dashboard</a>
-                    </div>
-                <?php endif; ?>
-
-                <div class="recycle-text">♻ Recycle Waste, Save Earth 🌍</div>
-                <div class="start-button-container">
-                    <button class="start-button" id="startBtn" onclick="revealOptions()">Start Now</button>
-                    <div class="option-buttons" id="options">
-                        <div class="recycle-text">Which one would you like to proceed with?</div>
-                        <div>
-                            <a href="sell.php"><button class="option-button">Sell</button></a>
-                            <a href="buy.php"><button class="option-button">Buy</button></a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    
+    <main class="main-content">
+        <div class="page-title">
+            Recycle Waste, Save Earth 🌍
         </div>
 
-        <script>
-            function revealOptions() {
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('options').style.display = 'flex';
-            }
-        </script>
+        <div class="rates-card">
+            <h3>Current Waste Rates</h3>
+            <table class="rates-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Rate (NPR/KG)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($wasteRates as $rate): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($rate['waste_type']); ?></td>
+                            <td><?php echo htmlspecialchars($rate['rate_per_kg']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($wasteRates)): ?>
+                        <tr><td colspan="2">No data available.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
     </main>
+
+    <div class="cta-container">
+        <a href="#" class="cta-button primary" id="startBtn" onclick="revealOptions(event)">Start Now</a>
+        <div id="options">
+            <a href="sell.php" class="cta-button primary">Sell Your Waste</a>
+            <a href="buy.php" class="cta-button secondary">Buy Recycled Products</a>
+        </div>
+        <?php if (!empty($dashboardLink)): ?>
+            <a href="<?php echo $dashboardLink; ?>" class="cta-button secondary" style="margin-top: 10px;">Go to Dashboard</a>
+        <?php endif; ?>
+    </div>
+
+    <script>
+        function revealOptions(event) {
+            event.preventDefault();
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('options').style.display = 'flex';
+        }
+    </script>
 
     <?php include 'include/footer.php'; ?>
 </body>
