@@ -1,4 +1,3 @@
-<!-- Change Detection Algorithm(Current Rates no:266-271, Recent Changes no: 301-317) -->
 <?php
 session_start();
 include "connect.php";
@@ -21,7 +20,9 @@ if (isset($_GET['waste_type'])) {
     header('Content-Type: application/json');
     $waste_type = mysqli_real_escape_string($db, $_GET['waste_type']);
 
-    // Fetch history for the selected waste type, sorted by oldest first for chart
+    // Fetch ALL history for the selected waste type, sorted by oldest first for chart
+    // The original code was already correct here, but let's confirm the logic.
+    // We fetch all records for the given waste type to provide a complete history.
     $stmt = $db->prepare("SELECT rate_per_kg, updated_at FROM waste_rate_history WHERE waste_type = ? ORDER BY updated_at ASC");
     $stmt->bind_param("s", $waste_type);
     $stmt->execute();
@@ -355,46 +356,64 @@ if ($result_recent) {
     }
 
     function createChart(history) {
+        // This is the core fix: Make sure the labels and data are correctly mapped from the history array.
         const labels = history.map(item => {
             const date = new Date(item.updated_at);
-            return date.toLocaleDateString();
+            // Format the date to be more readable on the chart
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         });
         const data = history.map(item => item.rate_per_kg);
 
         if (rateChart) {
             rateChart.destroy();
         }
-
-        rateChart = new Chart(chartCanvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Rate per kg (Rs.)',
-                    data: data,
-                    borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: false,
-                        title: {
-                            display: true,
-                            text: 'Rate (Rs./kg)'
+        
+        // Only create the chart if there is data to display
+        if (labels.length > 0) {
+            rateChart = new Chart(chartCanvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Rate per kg (Rs.)',
+                        data: data,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Rate (Rs./kg)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date and Time'
+                            }
                         }
                     },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Date'
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                // Add a callback to show the full date and time in the tooltip
+                                title: (tooltipItems) => {
+                                    return tooltipItems[0].label;
+                                },
+                                label: (tooltipItem) => {
+                                    return `Rate: ${tooltipItem.raw} Rs./kg`;
+                                }
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     async function updateHistory() {
