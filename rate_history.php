@@ -15,14 +15,10 @@ if (isset($con) && $con instanceof mysqli) {
     die("Database connection not found. Check connect.php.");
 }
 
-// Check if a specific waste type is requested via GET and handle the AJAX request
+// Check if a specific waste type is requested via GET and handle the AJAX request for the chart
 if (isset($_GET['waste_type'])) {
     header('Content-Type: application/json');
     $waste_type = mysqli_real_escape_string($db, $_GET['waste_type']);
-
-    // Fetch ALL history for the selected waste type, sorted by oldest first for chart
-    // The original code was already correct here, but let's confirm the logic.
-    // We fetch all records for the given waste type to provide a complete history.
     $stmt = $db->prepare("SELECT rate_per_kg, updated_at FROM waste_rate_history WHERE waste_type = ? ORDER BY updated_at ASC");
     $stmt->bind_param("s", $waste_type);
     $stmt->execute();
@@ -31,20 +27,22 @@ if (isset($_GET['waste_type'])) {
     while ($row = $result->fetch_assoc()) {
         $history_data[] = $row;
     }
-
     echo json_encode(['history' => $history_data]);
-    exit(); // Stop script execution after sending JSON
+    exit();
 }
 
-// Fetch all current waste rates for the right sidebar with previous rates for comparison
+// Fetch the most recent rate for each waste type from the waste_rate_history table for "Current Rates"
 $current_rates = [];
-$result = mysqli_query($db, "SELECT waste_type, rate_per_kg FROM waste_rates ORDER BY waste_type ASC");
-if ($result) {
-    while ($row = mysqli_fetch_assoc($result)) {
+$stmt_current = $db->prepare("SELECT waste_type, rate_per_kg FROM waste_rate_history WHERE (waste_type, updated_at) IN (SELECT waste_type, MAX(updated_at) FROM waste_rate_history GROUP BY waste_type) ORDER BY waste_type ASC");
+$stmt_current->execute();
+$result_current = $stmt_current->get_result();
+if ($result_current) {
+    while ($row = mysqli_fetch_assoc($result_current)) {
+        // Now find the previous rate for comparison
         $previous_rate = null;
-        $stmt_prev = $db->prepare("SELECT rate_per_kg FROM waste_rate_history WHERE waste_type = ? ORDER BY updated_at DESC LIMIT 1, 1");
+        $stmt_prev = $db->prepare("SELECT rate_per_kg FROM waste_rate_history WHERE waste_type = ? AND updated_at < (SELECT MAX(updated_at) FROM waste_rate_history WHERE waste_type = ?) ORDER BY updated_at DESC LIMIT 1");
         if ($stmt_prev) {
-            $stmt_prev->bind_param("s", $row['waste_type']);
+            $stmt_prev->bind_param("ss", $row['waste_type'], $row['waste_type']);
             $stmt_prev->execute();
             $res_prev = $stmt_prev->get_result();
             if ($row_prev = $res_prev->fetch_assoc()) {
@@ -52,11 +50,11 @@ if ($result) {
             }
             $stmt_prev->close();
         }
-
         $row['previous_rate'] = $previous_rate;
         $current_rates[] = $row;
     }
 }
+$stmt_current->close();
 
 // Fetch recent rate changes for the second table on the right
 $recent_changes = [];
@@ -66,7 +64,6 @@ if ($result_recent) {
         $recent_changes[] = $row;
     }
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -98,8 +95,7 @@ if ($result_recent) {
             display: flex;
             min-height: 100vh;
         }
-        
-        /* New layout: left side is content, right is sidebar */
+
         .content {
             flex-grow: 1;
             padding: 20px;
@@ -110,7 +106,7 @@ if ($result_recent) {
             width: 30%;
             background-color: #fff;
             padding: 20px;
-            box-shadow: -2px 0 6px rgba(0,0,0,0.1); /* Shadow on left side */
+            box-shadow: -2px 0 6px rgba(0,0,0,0.1);
             position: sticky;
             top: 0;
             overflow-y: auto;
@@ -128,7 +124,7 @@ if ($result_recent) {
             font-size: 1.5rem;
         }
 
-        .table-container, .chart-container {
+        .table-container, .chart-container, .card-list-container {
             background: #fff;
             border-radius: 12px;
             box-shadow: 0 6px 12px rgba(0,0,0,0.1);
@@ -136,40 +132,140 @@ if ($result_recent) {
             padding: 20px;
             margin-bottom: 20px;
         }
-        
-        /* Specific container for the right sidebar's content */
+
         .sidebar-content {
             display: flex;
             flex-direction: column;
             gap: 20px;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+        /* TABS/TOGGLE STYLES */
+        .sidebar-tabs {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            background-color: #e9e9e9;
+            border-radius: 10px;
+            padding: 5px;
         }
 
-        th, td {
+        .tab-button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background-color: transparent;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+            border-radius: 8px;
+            color: var(--text-color-dark);
+        }
+
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* CARD LIST STYLES */
+        .rate-card-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .rate-card {
+            background-color: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .rate-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .rate-card-details h4 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--primary-color);
+        }
+
+        .rate-card-details p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+            color: #777;
+        }
+        
+        .rate-card-details strong {
+            font-size: 1.2rem;
+            color: var(--text-color-dark);
+        }
+
+        .rate-change-indicator {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        .rate-change-icon {
+            font-size: 1.2rem;
+            margin-right: 5px;
+        }
+        
+        .rate-increase {
+            color: #28a745; /* green */
+        }
+
+        .rate-decrease {
+            color: #dc3545; /* red */
+        }
+
+        .rate-stable {
+            color: #6c757d; /* grey */
+        }
+        
+        .recent-changes-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .recent-changes-table th, .recent-changes-table td {
             padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
 
-        thead th {
+        .recent-changes-table thead th {
             background-color: var(--primary-color);
             color: white;
             font-weight: 600;
         }
 
-        tbody tr:nth-child(even) {
+        .recent-changes-table tbody tr:nth-child(even) {
             background-color: #f9f9f9;
         }
-
-        tbody tr:hover {
+        
+        .recent-changes-table tbody tr:hover {
             background-color: #f1f1f1;
         }
-
+        
         .no-data {
             text-align: center;
             padding: 40px;
@@ -179,12 +275,13 @@ if ($result_recent) {
 
         .actions {
             margin-top: 20px;
+            text-align: center;
         }
-        
+
         .btn {
             background: var(--primary-color);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 8px;
             text-decoration: none;
             border: none;
@@ -197,30 +294,6 @@ if ($result_recent) {
         .btn:hover {
             background-color: var(--secondary-color);
         }
-
-        .rate-increase {
-            color: #28a745; /* green */
-            font-weight: 600;
-        }
-
-        .rate-decrease {
-            color: #dc3545; /* red */
-            font-weight: 600;
-        }
-        
-        .rate-stable {
-            color: #6c757d; /* grey */
-        }
-        
-        .rate-change-icon {
-            font-weight: bold;
-            font-size: 0.9em;
-            margin-left: 5px;
-        }
-
-        .filter-section {
-            margin-bottom: 20px;
-        }
     </style>
 </head>
 <body>
@@ -229,105 +302,124 @@ if ($result_recent) {
     <div class="content">
         <h1>Waste Rate Change History</h1>
         
-        <div class="filter-section">
-            <label for="wasteTypeFilter">Select Waste Type:</label>
-            <select id="wasteTypeFilter" onchange="updateHistory()">
-                <?php foreach ($current_rates as $rate): ?>
-                    <option value="<?= htmlspecialchars($rate['waste_type']) ?>"><?= htmlspecialchars($rate['waste_type']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="chart-container">
-            <h2>Rate Change Chart</h2>
-            <canvas id="rateChart"></canvas>
+        <div class="table-container">
+            <div class="filter-section">
+                <label for="wasteTypeFilter">Select Waste Type:</label>
+                <select id="wasteTypeFilter">
+                    <?php foreach ($current_rates as $rate): ?>
+                        <option value="<?= htmlspecialchars($rate['waste_type']) ?>"><?= htmlspecialchars($rate['waste_type']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Rate Change Chart</h2>
+                <canvas id="rateChart"></canvas>
+            </div>
         </div>
     </div>
 
     <div class="sidebar">
         <div class="sidebar-content">
-            <div class="current-rates-section">
+            <div class="sidebar-tabs">
+                <button class="tab-button active" onclick="showTab('current-rates')">Current Rates</button>
+                <button class="tab-button" onclick="showTab('recent-changes')">Recent Changes</button>
+            </div>
+            
+            <div id="current-rates" class="tab-content active">
                 <h2>Current Rates</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Waste Type</th>
-                            <th>Rate (Rs./kg)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (count($current_rates) === 0): ?>
-                            <tr><td colspan="2" class="no-data">No current rates found.</td></tr>
-                        <?php else: ?>
-                            <?php foreach ($current_rates as $rate): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($rate['waste_type']) ?></td>
-                                    <td>
-                                        <?= htmlspecialchars($rate['rate_per_kg']) ?>
-                                        <?php if ($rate['previous_rate'] !== null): ?>
-                                            <?php if ($rate['rate_per_kg'] > $rate['previous_rate']): ?>
-                                                <span class="rate-change-icon rate-increase">&#x25B2;</span>
-                                            <?php elseif ($rate['rate_per_kg'] < $rate['previous_rate']): ?>
-                                                <span class="rate-change-icon rate-decrease">&#x25BC;</span>
-                                            <?php endif; ?>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                <?php if (count($current_rates) === 0): ?>
+                    <p class="no-data">No current rates found.</p>
+                <?php else: ?>
+                    <ul class="rate-card-list">
+                        <?php foreach ($current_rates as $rate): ?>
+                            <li class="rate-card">
+                                <div class="rate-card-details">
+                                    <h4><?= htmlspecialchars($rate['waste_type']) ?></h4>
+                                    <strong>Rs. <?= htmlspecialchars($rate['rate_per_kg']) ?>/kg</strong>
+                                </div>
+                                <div class="rate-change-indicator">
+                                    <?php 
+                                        $icon = '';
+                                        $status = 'Stable';
+                                        $class = 'rate-stable';
+                                        if ($rate['previous_rate'] !== null) {
+                                            if ($rate['rate_per_kg'] > $rate['previous_rate']) {
+                                                $icon = '<i class="fas fa-arrow-up"></i>';
+                                                $status = 'Increased';
+                                                $class = 'rate-increase';
+                                            } elseif ($rate['rate_per_kg'] < $rate['previous_rate']) {
+                                                $icon = '<i class="fas fa-arrow-down"></i>';
+                                                $status = 'Decreased';
+                                                $class = 'rate-decrease';
+                                            }
+                                        } else {
+                                            $icon = '<i class="fas fa-circle"></i>';
+                                            $status = 'New';
+                                        }
+                                    ?>
+                                    <span class="rate-change-icon <?= $class ?>"><?= $icon ?></span>
+                                    <span><?= $status ?></span>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
             </div>
 
-            <div class="recent-changes-section">
+            <div id="recent-changes" class="tab-content">
                 <h2>Recent Changes</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Waste Type</th>
-                            <th>New Rate</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (count($recent_changes) === 0): ?>
-                            <tr><td colspan="3" class="no-data">No recent changes.</td></tr>
-                        <?php else: ?>
-                            <?php 
-                            $prev_rates_lookup = [];
-                            foreach ($current_rates as $rate) {
-                                $prev_rates_lookup[$rate['waste_type']] = $rate['previous_rate'];
-                            }
-                            
-                            foreach ($recent_changes as $change): 
-                                $status = 'Stable';
-                                $icon = '&#x25C9;'; // circle
-                                $class = 'rate-stable';
+                <?php if (count($recent_changes) === 0): ?>
+                    <p class="no-data">No recent changes found.</p>
+                <?php else: ?>
+                    <div class="table-container">
+                        <table class="recent-changes-table">
+                            <thead>
+                                <tr>
+                                    <th>Waste Type</th>
+                                    <th>New Rate</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($recent_changes as $change): 
+                                    $status = 'Stable';
+                                    $icon = '<i class="fas fa-circle"></i>';
+                                    $class = 'rate-stable';
+                                    
+                                    // Find the rate from the history table that came immediately before this one
+                                    $stmt_prev_hist = $db->prepare("SELECT rate_per_kg FROM waste_rate_history WHERE waste_type = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT 1");
+                                    $stmt_prev_hist->bind_param("ss", $change['waste_type'], $change['updated_at']);
+                                    $stmt_prev_hist->execute();
+                                    $res_prev_hist = $stmt_prev_hist->get_result();
+                                    $prev_hist_rate = $res_prev_hist->fetch_assoc()['rate_per_kg'] ?? null;
+                                    $stmt_prev_hist->close();
 
-                                if (isset($prev_rates_lookup[$change['waste_type']])) {
-                                    if ($change['rate_per_kg'] > $prev_rates_lookup[$change['waste_type']]) {
-                                        $status = 'Increased';
-                                        $icon = '&#x25B2;'; // up arrow
-                                        $class = 'rate-increase';
-                                    } elseif ($change['rate_per_kg'] < $prev_rates_lookup[$change['waste_type']]) {
-                                        $status = 'Decreased';
-                                        $icon = '&#x25BC;'; // down arrow
-                                        $class = 'rate-decrease';
+                                    if ($prev_hist_rate !== null) {
+                                        if ($change['rate_per_kg'] > $prev_hist_rate) {
+                                            $status = 'Increased';
+                                            $icon = '<i class="fas fa-arrow-up"></i>';
+                                            $class = 'rate-increase';
+                                        } elseif ($change['rate_per_kg'] < $prev_hist_rate) {
+                                            $status = 'Decreased';
+                                            $icon = '<i class="fas fa-arrow-down"></i>';
+                                            $class = 'rate-decrease';
+                                        }
                                     }
-                                }
-                            ?>
-                            <tr>
-                                <td><?= htmlspecialchars($change['waste_type']) ?></td>
-                                <td><?= htmlspecialchars($change['rate_per_kg']) ?></td>
-                                <td class="<?= $class ?>">
-                                    <span class="rate-change-icon"><?= $icon ?></span>
-                                    <?= $status ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                                ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($change['waste_type']) ?></td>
+                                    <td><?= htmlspecialchars($change['rate_per_kg']) ?></td>
+                                    <td class="<?= $class ?>">
+                                        <span class="rate-change-icon"><?= $icon ?></span>
+                                        <?= $status ?>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div class="actions">
@@ -342,8 +434,6 @@ if ($result_recent) {
     const chartCanvas = document.getElementById('rateChart');
     let rateChart;
 
-    const currentRates = <?= json_encode(array_column($current_rates, 'rate_per_kg', 'waste_type')) ?>;
-
     async function fetchHistory(wasteType) {
         try {
             const response = await fetch(`rate_history.php?waste_type=${encodeURIComponent(wasteType)}`);
@@ -356,10 +446,8 @@ if ($result_recent) {
     }
 
     function createChart(history) {
-        // This is the core fix: Make sure the labels and data are correctly mapped from the history array.
         const labels = history.map(item => {
             const date = new Date(item.updated_at);
-            // Format the date to be more readable on the chart
             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         });
         const data = history.map(item => item.rate_per_kg);
@@ -368,7 +456,6 @@ if ($result_recent) {
             rateChart.destroy();
         }
         
-        // Only create the chart if there is data to display
         if (labels.length > 0) {
             rateChart = new Chart(chartCanvas, {
                 type: 'line',
@@ -401,7 +488,6 @@ if ($result_recent) {
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                // Add a callback to show the full date and time in the tooltip
                                 title: (tooltipItems) => {
                                     return tooltipItems[0].label;
                                 },
@@ -422,10 +508,25 @@ if ($result_recent) {
         createChart(historyData);
     }
 
-    // Initial load
-    if (wasteTypeFilter.options.length > 0) {
-        updateHistory();
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
     }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+        if (wasteTypeFilter.options.length > 0) {
+            updateHistory();
+        }
+        wasteTypeFilter.addEventListener('change', updateHistory);
+    });
 </script>
 </body>
 </html>

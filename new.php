@@ -188,6 +188,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <span>My Pickup History</span>
                         </a>
                     </li>
+                    <li>
+                        <a href="?page=rates" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200 <?php echo $currentPage == 'rates' ? 'bg-gray-700' : ''; ?>">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-3">
+                                <path d="M11.474 1.296a.75.75 0 0 1 1.052 0l7.5 7.5a.75.75 0 0 1-1.052 1.052L12 3.864 4.026 9.848a.75.75 0 0 1-1.052-1.052l7.5-7.5Z" />
+                                <path fill-rule="evenodd" d="M3 13.5a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75c0 .414-.336.75-.75.75H17.25a.75.75 0 0 1-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75a.75.75 0 0 0-.75.75h-1.5a.75.75 0 0 0-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75a.75.75 0 0 0-.75.75h-1.5a.75.75 0 0 0-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75A.75.75 0 0 1 3 21.75V13.5Z" clip-rule="evenodd" />
+                            </svg>
+                            <span>Rates</span>
+                        </a>
+                    </li>
                 </ul>
             </div>
         </nav>
@@ -241,21 +250,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                             $stmt->close();
                         }
-
-                        // Fetch waste rates for the new table
-                        $waste_rates_query = $con->query("SELECT * FROM waste_rates ORDER BY waste_type ASC");
-                        if ($waste_rates_query === false) {
-                            $dashboardMessage .= '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to retrieve waste rates. Check if the "waste_rates" table exists.</p></div>';
-                            $waste_rates = [];
-                        } else {
-                            $waste_rates = $waste_rates_query->fetch_all(MYSQLI_ASSOC);
-                        }
                 ?>
                         <?= $dashboardMessage; ?>
                         <!-- Dashboard Container -->
-                        <div class="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-8">
-                            <!-- Left side: Metric Cards and Button -->
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-1 gap-8">
+                            <!-- Metric Cards and Button -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <!-- Total Requests Card -->
                                 <div class="bg-blue-500 text-white rounded-2xl shadow-lg p-6 flex flex-col items-center justify-center transform hover:scale-105 transition-transform duration-300 h-40">
                                     <div class="count-text">Total Requests</div>
@@ -287,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div class="count-value">Rs. <?= htmlspecialchars(number_format($totalEarned, 2)) ?></div>
                                 </div>
                                 <!-- Button to Request a New Pickup -->
-                                <div class="col-span-1 sm:col-span-2 mt-4">
+                                <div class="col-span-1 sm:col-span-2 lg:col-span-3 mt-4">
                                     <a href="?page=new_pickup" class="w-full inline-flex items-center justify-center px-8 py-4 rounded-full text-xl font-bold bg-green-500 text-white hover:bg-green-600 transition-colors duration-300 shadow-lg transform hover:scale-105">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-3">
                                             <path fill-rule="evenodd" d="M12 5.25a.75.75 0 0 1 .75.75v5.25H18a.75.75 0 0 1 0 1.5h-5.25V18a.75.75 0 0 1-1.5 0v-5.25H6a.75.75 0 0 1 0-1.5h5.25V6a.75.75 0 0 1 .75-.75Z" clip-rule="evenodd" />
@@ -296,9 +296,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </a>
                                 </div>
                             </div>
-                            <!-- Right side: Current Waste Rates Table -->
+                        </div>
+                <?php
+                        break;
+
+                    case 'rates':
+                        // Fetch waste rates for the new table
+                        $waste_rates_query = $con->query("SELECT * FROM waste_rates ORDER BY waste_type ASC");
+                        if ($waste_rates_query === false) {
+                            $ratesMessage = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4" role="alert"><p class="font-bold">Error:</p><p class="text-sm">Failed to retrieve waste rates. Check if the "waste_rates" table exists.</p></div>';
+                            $waste_rates = [];
+                        } else {
+                            $waste_rates = $waste_rates_query->fetch_all(MYSQLI_ASSOC);
+                        }
+                ?>
+                        <!-- Current Waste Rates Section -->
+                        <section id="waste-rates-section">
+                            <h2 class="text-3xl font-bold text-gray-800 mb-6">Current Waste Rates</h2>
                             <div class="bg-white p-6 rounded-2xl shadow-lg">
-                                <h2 class="text-xl font-bold text-gray-800 mb-4">Current Waste Rates</h2>
                                 <div class="scrollable-table-container">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50 sticky top-0">
@@ -324,11 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </table>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                 <?php
                         break;
 
                     case 'new_pickup':
+                        // Check if a waste type was passed in the URL to pre-select it
+                        $preselected_waste_type = isset($_GET['waste_type']) ? $_GET['waste_type'] : '';
                 ?>
                         <!-- Action Section: New Request Form -->
                         <section id="new-request-form-section">
@@ -350,7 +367,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <select id="wasteSelect" name="waste_type" required class="shadow appearance-none border rounded-full w-full py-3 px-6 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200">
                                             <option value="">-- Select Waste Type --</option>
                                             <?php foreach ($waste_options as $opt): ?>
-                                                <option value="<?= htmlspecialchars($opt['waste_type']) ?>" data-rate="<?= htmlspecialchars($opt['rate_per_kg']) ?>"><?= htmlspecialchars($opt['waste_type']) ?></option>
+                                                <option value="<?= htmlspecialchars($opt['waste_type']) ?>" data-rate="<?= htmlspecialchars($opt['rate_per_kg']) ?>">
+                                                    <?= htmlspecialchars($opt['waste_type']) ?>
+                                                </option>
                                             <?php endforeach; ?>
                                             <option value="Other">Other</option>
                                         </select>
@@ -524,23 +543,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const otherTypeBox = document.getElementById('otherTypeBox');
             const rateBox = document.getElementById('rateBox');
             const rateInput = document.getElementById('rate_per_kg');
-            
+            const preselectedWasteType = "<?= htmlspecialchars($preselected_waste_type) ?>";
+
+            // Function to update rate display
+            function updateRateDisplay() {
+                const selected = wasteSelect.options[wasteSelect.selectedIndex];
+                const rate = selected.getAttribute("data-rate");
+
+                if (wasteSelect.value === "Other") {
+                    otherTypeBox.style.display = "block";
+                    rateBox.innerText = "Rate: To be evaluated by collector";
+                    rateInput.value = 0;
+                } else {
+                    otherTypeBox.style.display = "none";
+                    rateBox.innerText = `Rate: Rs. ${rate} per kg`;
+                    rateInput.value = rate;
+                }
+            }
+
             // Handle rate display and other input
             if (wasteSelect) {
-                wasteSelect.addEventListener("change", function () {
-                    const selected = this.options[this.selectedIndex];
-                    const rate = selected.getAttribute("data-rate");
-
-                    if (this.value === "Other") {
-                        otherTypeBox.style.display = "block";
-                        rateBox.innerText = "Rate: To be evaluated by collector";
-                        rateInput.value = 0;
-                    } else {
-                        otherTypeBox.style.display = "none";
-                        rateBox.innerText = `Rate: Rs. ${rate} per kg`;
-                        rateInput.value = rate;
-                    }
-                });
+                wasteSelect.addEventListener("change", updateRateDisplay);
             }
 
             // Initialize Leaflet Map
