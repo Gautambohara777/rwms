@@ -2,6 +2,79 @@
 // Start the session to access session variables.
 session_start();
 
+// Handle AJAX requests for chart data before session check
+if (isset($_GET['page']) && $_GET['page'] === 'rates' && isset($_GET['waste_type'])) {
+    // Include the database connection file.
+    if (!file_exists('connect.php')) {
+        die("Error: The 'connect.php' file is missing. Please ensure it's in the same directory.");
+    }
+    include_once 'connect.php';
+    
+    // Check if the mysqli connection object is set.
+    if (!isset($con) || $con->connect_error) {
+        die("Error: The database connection failed. Please ensure 'connect.php' is in the same directory and the credentials are correct.");
+    }
+    
+    header('Content-Type: application/json');
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET');
+    
+    $waste_type = mysqli_real_escape_string($con, $_GET['waste_type']);
+    
+    // Debug: Log the request
+    error_log("Chart AJAX request for waste_type: " . $waste_type);
+    
+    // First, get historical data
+    $stmt = $con->prepare("SELECT rate_per_kg, updated_at FROM waste_rate_history WHERE waste_type = ? ORDER BY updated_at ASC");
+    if ($stmt === false) {
+        echo json_encode(['error' => 'Failed to prepare statement: ' . $con->error]);
+        exit();
+    }
+    
+    $stmt->bind_param("s", $waste_type);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $history_data = [];
+    
+    while ($row = $result->fetch_assoc()) {
+        $history_data[] = $row;
+    }
+    $stmt->close();
+    
+    // Now get the current rate from waste_rates table
+    $stmt_current = $con->prepare("SELECT rate_per_kg FROM waste_rates WHERE waste_type = ?");
+    if ($stmt_current) {
+        $stmt_current->bind_param("s", $waste_type);
+        $stmt_current->execute();
+        $result_current = $stmt_current->get_result();
+        if ($row_current = $result_current->fetch_assoc()) {
+            $current_rate = $row_current['rate_per_kg'];
+            
+            // Add current rate as the latest data point if it's different from the last historical rate
+            $last_historical_rate = null;
+            if (!empty($history_data)) {
+                $last_historical_rate = end($history_data)['rate_per_kg'];
+            }
+            
+            // Only add current rate if it's different from the last historical rate or if there's no history
+            if ($last_historical_rate === null || $current_rate != $last_historical_rate) {
+                $history_data[] = [
+                    'rate_per_kg' => $current_rate,
+                    'updated_at' => date('Y-m-d H:i:s') // Current timestamp
+                ];
+            }
+        }
+        $stmt_current->close();
+    }
+    
+    // Debug: Log the result
+    error_log("Chart data count for '" . $waste_type . "': " . count($history_data));
+    
+    echo json_encode(['history' => $history_data]);
+    $con->close();
+    exit();
+}
+
 // Check if the user is logged in. If not, redirect to the login page.
 if (!isset($_SESSION['user'])) {
     header('Location: login.php');
@@ -186,6 +259,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <path d="M11.5 5.25a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1 0-1.5h2.25V6a.75.75 0 0 1 .75-.75Zm3.36 1.794a.75.75 0 0 1 .799-.597 7.5 7.5 0 0 1 2.373 5.488.75.75 0 0 1-1.5-.098 6 6 0 0 0-1.92-4.394.75.75 0 0 1-.752-.449ZM6.96 6.554a.75.75 0 0 1 1.058.077 6 6 0 0 0 4.295 8.293.75.75 0 0 1 .632.483l.256.638a.75.75 0 0 1-.295.968 7.5 7.5 0 0 1-5.741-6.757.75.75 0 0 1 .495-.702ZM-1.87 2.05a.75.75 0 0 1 .786-1.229 7.5 7.5 0 0 1 6.521 3.23.75.75 0 0 1-1.33.722A6 6 0 0 0 6.64 8.604ZM14.498 17.067a.75.75 0 0 1 .597.799 6 6 0 0 0-4.394-1.92.75.75 0 0 1-.449-.752l.08-.265a.75.75 0 0 1 .968-.295 7.5 7.5 0 0 1 3.23 6.52.75.75 0 0 1-1.229.786 6 6 0 0 0 6.505-3.21l.266-.08a.75.75 0 0 1 .495.702Z" />
                             </svg>
                             <span>My Pickup History</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="?page=rates" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200 <?php echo $currentPage == 'rates' ? 'bg-gray-700' : ''; ?>">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-3">
+                                <path d="M11.474 1.296a.75.75 0 0 1 1.052 0l7.5 7.5a.75.75 0 0 1-1.052 1.052L12 3.864 4.026 9.848a.75.75 0 0 1-1.052-1.052l7.5-7.5Z" />
+                                <path fill-rule="evenodd" d="M3 13.5a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75v-6.75a.75.75 0 0 1 1.5 0v6.75c0 .414-.336.75-.75.75H17.25a.75.75 0 0 1-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75a.75.75 0 0 0-.75.75h-1.5a.75.75 0 0 0-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75a.75.75 0 0 0-.75.75h-1.5a.75.75 0 0 0-.75-.75v-6.75a.75.75 0 0 0-1.5 0v6.75A.75.75 0 0 1 3 21.75V13.5Z" clip-rule="evenodd" />
+                            </svg>
+                            <span>Rates</span>
                         </a>
                     </li>
                 </ul>
@@ -488,6 +570,389 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </section>
                 <?php
                         break;
+
+                    case 'rates':
+                        // Include the rate history functionality
+
+
+                        // Fetch current rates from the waste_rates table
+                        $current_rates = [];
+                        $stmt_current = $con->prepare("SELECT waste_type, rate_per_kg FROM waste_rates ORDER BY waste_type ASC");
+                        $stmt_current->execute();
+                        $result_current = $stmt_current->get_result();
+                        if ($result_current) {
+                            while ($row = mysqli_fetch_assoc($result_current)) {
+                                // Find the previous rate from history for comparison
+                                $previous_rate = null;
+                                $stmt_prev = $con->prepare("SELECT rate_per_kg FROM waste_rate_history WHERE waste_type = ? ORDER BY updated_at DESC LIMIT 1");
+                                if ($stmt_prev) {
+                                    $stmt_prev->bind_param("s", $row['waste_type']);
+                                    $stmt_prev->execute();
+                                    $res_prev = $stmt_prev->get_result();
+                                    if ($row_prev = $res_prev->fetch_assoc()) {
+                                        $previous_rate = $row_prev['rate_per_kg'];
+                                    }
+                                    $stmt_prev->close();
+                                }
+                                $row['previous_rate'] = $previous_rate;
+                                $current_rates[] = $row;
+                            }
+                        }
+                        $stmt_current->close();
+
+                        // Fetch recent rate changes for the second table on the right
+                        $recent_changes = [];
+                        $result_recent = mysqli_query($con, "SELECT waste_type, rate_per_kg, updated_at FROM waste_rate_history ORDER BY updated_at DESC LIMIT 5");
+                        if ($result_recent) {
+                            while ($row = mysqli_fetch_assoc($result_recent)) {
+                                $recent_changes[] = $row;
+                            }
+                        }
+                ?>
+                        <!-- Waste Rate History Section -->
+                        <section id="waste-rates-section">
+                            <h2 class="text-3xl font-bold text-gray-800 mb-6">Waste Rate History</h2>
+                            
+                            <!-- Main Content Grid -->
+                            <div class="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-8">
+                                <!-- Left side: Chart -->
+                                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                                    <div class="mb-6">
+                                        <label for="wasteTypeFilter" class="block text-sm font-medium text-gray-700 mb-2">Select Waste Type:</label>
+                                        <select id="wasteTypeFilter" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500">
+                                            <?php foreach ($current_rates as $rate): ?>
+                                                <option value="<?= htmlspecialchars($rate['waste_type']) ?>"><?= htmlspecialchars($rate['waste_type']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="chart-container">
+                                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Rate Change Chart</h3>
+                                        <div id="chartLoading" class="text-center py-8 text-gray-500" style="display: none;">
+                                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                                            <p class="mt-2">Loading chart data...</p>
+                                        </div>
+                                        <div style="position: relative; height: 400px; width: 100%;">
+                                            <canvas id="rateChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right side: Current Rates and Recent Changes -->
+                                <div class="space-y-6">
+                                    <!-- Current Rates -->
+                                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Current Rates</h3>
+                                        <?php if (count($current_rates) === 0): ?>
+                                            <p class="text-gray-500 text-center py-4">No current rates found.</p>
+                                        <?php else: ?>
+                                            <div class="space-y-3">
+                                                <?php foreach ($current_rates as $rate): ?>
+                                                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                                                        <div>
+                                                            <h4 class="font-semibold text-gray-800 capitalize"><?= htmlspecialchars($rate['waste_type']) ?></h4>
+                                                            <p class="text-lg font-bold text-green-600">Rs. <?= htmlspecialchars($rate['rate_per_kg']) ?>/kg</p>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <?php 
+                                                                $icon = '';
+                                                                $status = 'Stable';
+                                                                $class = 'text-gray-500';
+                                                                if ($rate['previous_rate'] !== null) {
+                                                                    if ($rate['rate_per_kg'] > $rate['previous_rate']) {
+                                                                        $icon = '↗';
+                                                                        $status = 'Increased';
+                                                                        $class = 'text-green-600';
+                                                                    } elseif ($rate['rate_per_kg'] < $rate['previous_rate']) {
+                                                                        $icon = '↘';
+                                                                        $status = 'Decreased';
+                                                                        $class = 'text-red-600';
+                                                                    }
+                                                                } else {
+                                                                    $icon = '●';
+                                                                    $status = 'New';
+                                                                    $class = 'text-blue-600';
+                                                                }
+                                                            ?>
+                                                            <span class="text-2xl <?= $class ?>"><?= $icon ?></span>
+                                                            <p class="text-sm <?= $class ?>"><?= $status ?></p>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- Recent Changes -->
+                                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Recent Changes</h3>
+                                        <?php if (count($recent_changes) === 0): ?>
+                                            <p class="text-gray-500 text-center py-4">No recent changes found.</p>
+                                        <?php else: ?>
+                                            <div class="space-y-3">
+                                                <?php foreach ($recent_changes as $change): 
+                                                    $status = 'Stable';
+                                                    $icon = '●';
+                                                    $class = 'text-gray-500';
+                                                    
+                                                    // Find the rate from the history table that came immediately before this one
+                                                    $stmt_prev_hist = $con->prepare("SELECT rate_per_kg FROM waste_rate_history WHERE waste_type = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT 1");
+                                                    $stmt_prev_hist->bind_param("ss", $change['waste_type'], $change['updated_at']);
+                                                    $stmt_prev_hist->execute();
+                                                    $res_prev_hist = $stmt_prev_hist->get_result();
+                                                    $prev_hist_rate = $res_prev_hist->fetch_assoc()['rate_per_kg'] ?? null;
+                                                    $stmt_prev_hist->close();
+
+                                                    if ($prev_hist_rate !== null) {
+                                                        if ($change['rate_per_kg'] > $prev_hist_rate) {
+                                                            $status = 'Increased';
+                                                            $icon = '↗';
+                                                            $class = 'text-green-600';
+                                                        } elseif ($change['rate_per_kg'] < $prev_hist_rate) {
+                                                            $status = 'Decreased';
+                                                            $icon = '↘';
+                                                            $class = 'text-red-600';
+                                                        }
+                                                    }
+                                                ?>
+                                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                        <div>
+                                                            <p class="font-medium text-gray-800 capitalize"><?= htmlspecialchars($change['waste_type']) ?></p>
+                                                            <p class="text-sm text-gray-600">Rs. <?= htmlspecialchars($change['rate_per_kg']) ?>/kg</p>
+                                                            <p class="text-xs text-gray-500"><?= date('M d, Y', strtotime($change['updated_at'])) ?></p>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <span class="text-xl <?= $class ?>"><?= $icon ?></span>
+                                                            <p class="text-sm <?= $class ?>"><?= $status ?></p>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Chart.js Script -->
+                        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                        <script>
+                            // Wait for DOM to be fully loaded
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const wasteTypeFilter = document.getElementById('wasteTypeFilter');
+                                const chartCanvas = document.getElementById('rateChart');
+                                let rateChart = null;
+
+                                // Debug function to check if elements exist
+                                console.log('wasteTypeFilter:', wasteTypeFilter);
+                                console.log('chartCanvas:', chartCanvas);
+
+                                async function fetchHistory(wasteType) {
+                                    try {
+                                        console.log('Fetching history for:', wasteType);
+                                        
+                                        // Show loading indicator
+                                        const loadingDiv = document.getElementById('chartLoading');
+                                        const chartDiv = document.querySelector('#rateChart').parentElement;
+                                        if (loadingDiv && chartDiv) {
+                                            loadingDiv.style.display = 'block';
+                                            chartDiv.style.display = 'none';
+                                        }
+                                        
+                                        const response = await fetch(`?page=rates&waste_type=${encodeURIComponent(wasteType)}`);
+                                        console.log('Response status:', response.status);
+                                        
+                                        if (!response.ok) {
+                                            throw new Error(`HTTP error! status: ${response.status}`);
+                                        }
+                                        
+                                        const data = await response.json();
+                                        console.log('Fetched data:', data);
+                                        
+                                        // Hide loading indicator
+                                        if (loadingDiv && chartDiv) {
+                                            loadingDiv.style.display = 'none';
+                                            chartDiv.style.display = 'block';
+                                        }
+                                        
+                                        return data.history || [];
+                                    } catch (error) {
+                                        console.error('Error fetching data:', error);
+                                        
+                                        // Hide loading indicator on error
+                                        const loadingDiv = document.getElementById('chartLoading');
+                                        const chartDiv = document.querySelector('#rateChart').parentElement;
+                                        if (loadingDiv && chartDiv) {
+                                            loadingDiv.style.display = 'none';
+                                            chartDiv.style.display = 'block';
+                                        }
+                                        
+                                        return [];
+                                    }
+                                }
+
+                                function createChart(history) {
+                                    console.log('Creating chart with history:', history);
+                                    
+                                    if (rateChart) {
+                                        rateChart.destroy();
+                                        rateChart = null;
+                                    }
+                                    
+                                    if (!history || history.length === 0) {
+                                        // Show message when no data
+                                        if (chartCanvas && chartCanvas.parentElement) {
+                                            chartCanvas.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500"><p>No historical data available for this waste type.</p></div>';
+                                        }
+                                        return;
+                                    }
+
+                                    const labels = history.map(item => {
+                                        const date = new Date(item.updated_at);
+                                        return date.toLocaleDateString('en-US', { 
+                                            year: 'numeric', 
+                                            month: 'short', 
+                                            day: 'numeric', 
+                                            hour: '2-digit', 
+                                            minute: '2-digit' 
+                                        });
+                                    });
+                                    const data = history.map(item => parseFloat(item.rate_per_kg));
+                                    
+                                    // Determine which point is the current rate (last point)
+                                    const pointBackgroundColors = history.map((item, index) => {
+                                        return index === history.length - 1 ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // Red for current, green for historical
+                                    });
+                                    const pointBorderColors = history.map((item, index) => {
+                                        return index === history.length - 1 ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
+                                    });
+                                    const pointRadius = history.map((item, index) => {
+                                        return index === history.length - 1 ? 6 : 4; // Larger point for current rate
+                                    });
+
+                                    console.log('Chart labels:', labels);
+                                    console.log('Chart data:', data);
+
+                                    if (chartCanvas) {
+                                        rateChart = new Chart(chartCanvas, {
+                                            type: 'line',
+                                            data: {
+                                                labels: labels,
+                                                datasets: [{
+                                                    label: 'Rate per kg (Rs.)',
+                                                    data: data,
+                                                    borderColor: 'rgb(34, 197, 94)',
+                                                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                                    tension: 0.1,
+                                                    fill: true,
+                                                    pointBackgroundColor: pointBackgroundColors,
+                                                    pointBorderColor: pointBorderColors,
+                                                    pointRadius: pointRadius,
+                                                    pointHoverRadius: 8
+                                                }]
+                                            },
+                                            options: {
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                interaction: {
+                                                    intersect: false,
+                                                    mode: 'index'
+                                                },
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: false,
+                                                        title: {
+                                                            display: true,
+                                                            text: 'Rate (Rs./kg)'
+                                                        },
+                                                        grid: {
+                                                            color: 'rgba(0, 0, 0, 0.1)'
+                                                        }
+                                                    },
+                                                    x: {
+                                                        title: {
+                                                            display: true,
+                                                            text: 'Date and Time'
+                                                        },
+                                                        grid: {
+                                                            color: 'rgba(0, 0, 0, 0.1)'
+                                                        }
+                                                    }
+                                                },
+                                                plugins: {
+                                                    legend: {
+                                                        display: true,
+                                                        position: 'top',
+                                                        labels: {
+                                                            generateLabels: function(chart) {
+                                                                const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                                                const labels = original.call(this, chart);
+                                                                labels.push({
+                                                                    text: '● Current Rate',
+                                                                    fillStyle: 'rgb(239, 68, 68)',
+                                                                    strokeStyle: 'rgb(239, 68, 68)',
+                                                                    lineWidth: 0,
+                                                                    pointStyle: 'circle',
+                                                                    hidden: false,
+                                                                    index: labels.length
+                                                                });
+                                                                return labels;
+                                                            }
+                                                        }
+                                                    },
+                                                    tooltip: {
+                                                        callbacks: {
+                                                            title: (tooltipItems) => {
+                                                                return tooltipItems[0].label;
+                                                            },
+                                                            label: (tooltipItem) => {
+                                                                const isCurrent = tooltipItem.dataIndex === data.length - 1;
+                                                                const label = isCurrent ? 'Current Rate' : 'Historical Rate';
+                                                                return `${label}: ${tooltipItem.raw} Rs./kg`;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+                                        console.log('Chart created successfully');
+                                    } else {
+                                        console.error('Chart canvas not found');
+                                    }
+                                }
+
+                                async function updateHistory() {
+                                    if (!wasteTypeFilter) {
+                                        console.error('Waste type filter not found');
+                                        return;
+                                    }
+                                    
+                                    const selectedWasteType = wasteTypeFilter.value;
+                                    console.log('Updating history for:', selectedWasteType);
+                                    
+                                    if (!selectedWasteType) {
+                                        console.log('No waste type selected');
+                                        return;
+                                    }
+                                    
+                                    const historyData = await fetchHistory(selectedWasteType);
+                                    createChart(historyData);
+                                }
+
+
+                                // Initialize chart when page loads
+                                if (wasteTypeFilter && wasteTypeFilter.options.length > 0) {
+                                    console.log('Initializing chart...');
+                                    updateHistory();
+                                    wasteTypeFilter.addEventListener('change', updateHistory);
+                                } else {
+                                    console.error('Waste type filter not found or has no options');
+                                }
+                            });
+                        </script>
+                <?php
+                        break;
+
                     default:
                         echo '<p class="text-gray-500">Page not found.</p>';
                         break;
