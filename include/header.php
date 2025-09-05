@@ -44,14 +44,15 @@ switch ($userRole) {
     }
 
     .main-header {
-        background: var(--primary-color);
-        padding: 8px 30px;
+        background: linear-gradient(135deg, var(--primary-color) 0%, #1e5a2e 100%);
+        padding: 12px 30px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         z-index: 10;
         position: relative;
+        border-bottom: 3px solid var(--accent-color);
     }
 
     .main-header .logo-container {
@@ -63,6 +64,7 @@ switch ($userRole) {
 
     .main-header .logo-container:hover {
         transform: scale(1.05);
+        filter: brightness(1.1);
     }
 
     .main-header .logo-img {
@@ -74,7 +76,8 @@ switch ($userRole) {
         font-size: 1.8rem;
         font-weight: 700;
         color: var(--text-color-light);
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        letter-spacing: 0.5px;
     }
 
     .main-header nav {
@@ -89,33 +92,57 @@ switch ($userRole) {
         font-weight: 600;
         font-size: 1rem;
         position: relative;
-        transition: color 0.3s ease;
-    }
-
-    .main-header nav a::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        bottom: -5px;
-        width: 100%;
-        height: 2px;
-        background-color: var(--accent-color);
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
+        transition: all 0.3s ease;
+        padding: 8px 16px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
     }
 
     .main-header nav a:hover {
         color: var(--accent-color);
-    }
-
-    .main-header nav a:hover::after {
-        transform: scaleX(1);
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     .nav-username {
         font-weight: 600;
         margin-right: 15px;
         color: var(--accent-color);
+        background: rgba(160, 210, 219, 0.2);
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(160, 210, 219, 0.3);
+        font-size: 0.9rem;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .main-header {
+            padding: 10px 15px;
+            flex-wrap: wrap;
+        }
+        
+        .main-header nav {
+            margin-top: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .main-header nav a {
+            margin: 0 8px;
+            font-size: 0.9rem;
+            padding: 6px 12px;
+        }
+        
+        .company-name {
+            font-size: 1.5rem;
+        }
+        
+        .main-header .logo-img {
+            height: 50px;
+        }
     }
 </style>
 <header class="main-header">
@@ -131,8 +158,8 @@ switch ($userRole) {
         <?php endif; ?>
         <a href="<?php echo $homeLink; ?>">Home</a>
         <?php if ($userRole === 'user'): ?>
-            <a href="<?php echo $basePath; ?>/sell.php">Request Pickup</a>
-            <a href="<?php echo $basePath; ?>/pickup_history.php">My Requests</a>
+            <a href="<?php echo $basePath; ?>/user_dashboard.php?page=new_pickup">Request Pickup</a>
+            <a href="<?php echo $basePath; ?>/user_dashboard.php?page=pickup_history">My Requests</a>
         <?php endif; ?>
         <?php if ($userRole !== 'guest'): ?>
             <a href="<?php echo $basePath; ?>/logout.php">Logout</a>

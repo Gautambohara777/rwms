@@ -218,14 +218,21 @@ if ($userRole === 'admin') {
                     <?php endif; ?>
                 </tbody>
             </table>
+            
+            <?php if ($user): ?>
+                <!-- User Dashboard button below the rates table -->
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="user_dashboard.php" class="cta-button primary" style="display: inline-block; padding: 12px 24px; font-size: 1em;">User Dashboard</a>
+                </div>
+            <?php endif; ?>
         </div>
     </main>
 
     <div class="cta-container">
         <a href="#" class="cta-button primary" id="startBtn" onclick="revealOptions(event)">Start Now</a>
         <div id="options">
-            <a href="sell.php" class="cta-button primary">Sell Your Waste</a>
-            <a href="buy.php" class="cta-button secondary">Buy Recycled Products</a>
+            <a href="user_dashboard.php?page=new_pickup" class="cta-button primary">Send a Pickup Request</a>
+            <a href="buy.php" class="cta-button secondary">See Reusable Products</a>
         </div>
         <?php if (!empty($dashboardLink)): ?>
             <a href="<?php echo $dashboardLink; ?>" class="cta-button secondary" style="margin-top: 10px;">Go to Dashboard</a>

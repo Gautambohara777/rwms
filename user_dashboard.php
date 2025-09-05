@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'new_pickup':
             if (isset($_POST['request_pickup'])) {
                 // Sanitize and validate input data.
-                $name = trim($_POST['name']);
+                $name = $username; // Use the username from session
                 $waste_type = trim($_POST['waste_type']);
                 $other_waste_type = isset($_POST['other_waste_type']) ? trim($_POST['other_waste_type']) : '';
                 $weight = floatval($_POST['weight']);
@@ -166,6 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
+<?php include 'include/header.php'; ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -217,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Mobile Header with Hamburger Menu -->
     <header class="bg-white md:hidden p-4 flex items-center justify-between shadow-md">
-        <h1 class="text-xl font-bold text-gray-800">RecycleHub</h1>
+        <h1 class="text-xl font-bold text-gray-800">Welcome</h1>
         <button id="menu-button-top" class="text-gray-600 focus:outline-none">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
@@ -234,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 text-green-400">
                         <path d="M7.44 3.704a1.5 1.5 0 0 0-2.88 0l-1.704 6.816a1.5 1.5 0 0 0-.256 1.15l1.625 3.25a1.5 1.5 0 0 0 1.348.878h10.962a1.5 1.5 0 0 0 1.348-.878l1.625-3.25a1.5 1.5 0 0 0-.256-1.15L16.44 3.704a1.5 1.5 0 0 0-2.88 0l-1.704 6.816a1.5 1.5 0 0 0-2.56 0l-1.704-6.816Z" />
                     </svg>
-                    <h2 class="text-2xl font-bold">RecycleHub</h2>
+                    <h2 class="text-2xl font-bold">Welcome</h2>
                 </div>
                 <ul class="space-y-4">
                     <li>
@@ -377,6 +380,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         Request a New Pickup
                                     </a>
                                 </div>
+                                
+                                <!-- Recent History Box -->
+                                <div class="col-span-1 sm:col-span-2 mt-6">
+                                    <div class="bg-white rounded-2xl shadow-lg p-6">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h3 class="text-xl font-bold text-gray-800">Recent Activity</h3>
+                                            <a href="?page=pickup_history" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View All</a>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <?php
+                                            // Get recent pickup requests (last 5)
+                                            if ($user_id) {
+                                                $recent_stmt = $con->prepare("SELECT pr.*, wr.rate_per_kg FROM pickup_requests pr LEFT JOIN waste_rates wr ON pr.waste_type = wr.waste_type WHERE pr.user_id = ? ORDER BY pr.created_at DESC LIMIT 5");
+                                                if ($recent_stmt) {
+                                                    $recent_stmt->bind_param("i", $user_id);
+                                                    $recent_stmt->execute();
+                                                    $recent_result = $recent_stmt->get_result();
+                                                    $recent_pickups = $recent_result->fetch_all(MYSQLI_ASSOC);
+                                                    $recent_stmt->close();
+                                                } else {
+                                                    $recent_pickups = [];
+                                                }
+                                            } else {
+                                                $recent_pickups = [];
+                                            }
+                                            
+                                            if (!empty($recent_pickups)) :
+                                                foreach ($recent_pickups as $pickup) :
+                                                    $status = htmlspecialchars($pickup['status']);
+                                                    $status_class = '';
+                                                    $status_icon = '';
+                                                    
+                                                    if ($status == 'Pending') {
+                                                        $status_class = 'bg-yellow-100 text-yellow-800';
+                                                        $status_icon = '⏳';
+                                                    } elseif ($status == 'Approved') {
+                                                        $status_class = 'bg-blue-100 text-blue-800';
+                                                        $status_icon = '✅';
+                                                    } elseif ($status == 'Collected' || $status == 'Completed') {
+                                                        $status_class = 'bg-green-100 text-green-800';
+                                                        $status_icon = '🎉';
+                                                    } elseif ($status == 'Rejected') {
+                                                        $status_class = 'bg-red-100 text-red-800';
+                                                        $status_icon = '❌';
+                                                    }
+                                                    
+                                                    $date = date('M j, Y', strtotime($pickup['created_at']));
+                                                    $weight = htmlspecialchars($pickup['weight'] ?? 0);
+                                                    $waste_type = htmlspecialchars(ucfirst($pickup['waste_type'] ?? 'Unknown'));
+                                                    $earnings = floatval($weight) * floatval($pickup['rate_per_kg'] ?? 0);
+                                            ?>
+                                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                                        <div class="flex items-center space-x-3">
+                                                            <span class="text-lg"><?= $status_icon ?></span>
+                                                            <div>
+                                                                <p class="font-medium text-gray-900"><?= $waste_type ?> - <?= $weight ?>kg</p>
+                                                                <p class="text-sm text-gray-500"><?= $date ?></p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $status_class ?>">
+                                                                <?= $status ?>
+                                                            </span>
+                                                            <?php if ($status == 'Collected' || $status == 'Completed') : ?>
+                                                                <p class="text-sm font-medium text-green-600 mt-1">Rs. <?= number_format($earnings, 2) ?></p>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                            <?php 
+                                                endforeach;
+                                            else :
+                                            ?>
+                                                <div class="text-center py-8 text-gray-500">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-12 h-12 mx-auto mb-3 text-gray-300">
+                                                        <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6a.75.75 0 0 0 .75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd" />
+                                                    </svg>
+                                                    <p>No recent activity</p>
+                                                    <p class="text-sm">Start by requesting your first pickup!</p>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Right side: Current Waste Rates Table -->
                             <div class="bg-white p-6 rounded-2xl shadow-lg">
@@ -420,11 +506,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <!-- Hidden input for the button click -->
                                     <input type="hidden" name="request_pickup" value="1">
 
-                                    <!-- Name Field -->
-                                    <div>
-                                        <label for="name" class="block text-gray-700 font-bold mb-2">Your Name</label>
-                                        <input type="text" id="name" name="name" required class="shadow appearance-none border rounded-full w-full py-3 px-6 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200">
-                                    </div>
 
                                     <!-- Waste Type Dropdown -->
                                     <div>
@@ -453,17 +534,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <input type="number" step="0.01" id="weight" name="weight" required class="shadow appearance-none border rounded-full w-full py-3 px-6 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200">
                                     </div>
 
-                                    <!-- Address Field -->
+                                    <!-- Address Field (Auto-populated from map) -->
                                     <div>
                                         <label for="address" class="block text-gray-700 font-bold mb-2">Pickup Address</label>
-                                        <textarea id="address" name="address" rows="3" required class="shadow appearance-none border rounded-xl w-full py-3 px-6 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200"></textarea>
+                                        <textarea id="address" name="address" rows="3" required readonly class="shadow appearance-none border rounded-xl w-full py-3 px-6 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200 bg-gray-50" placeholder="Address will be automatically detected from map location..."></textarea>
+                                        <p class="text-sm text-gray-500 mt-1">Address will be automatically detected when you select a location on the map.</p>
                                     </div>
                                     
                                     <!-- Map Section -->
                                     <div>
-                                        <label class="block text-gray-700 font-bold mb-2">Select Location on Map</label>
-                                        <div id="map" class="rounded-xl shadow-lg"></div>
-                                        <p class="text-sm text-gray-500 mt-2">Drag the marker to your precise location.</p>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="block text-gray-700 font-bold">Select Location on Map</label>
+                                            <button type="button" id="expandMapBtn" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-1">
+                                                    <path fill-rule="evenodd" d="M3.75 3.75v4.5a.75.75 0 0 1-1.5 0v-4.5A2.25 2.25 0 0 1 4.5 1.5h4.5a.75.75 0 0 1 0 1.5H4.5a.75.75 0 0 0-.75.75ZM3.75 15.75v4.5a.75.75 0 0 0 .75.75h4.5a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-1.5 0ZM15.75 3.75h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 1 0-1.5ZM15.75 15.75a.75.75 0 0 1 1.5 0v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1 0-1.5h4.5a.75.75 0 0 0 .75-.75v-4.5Z" clip-rule="evenodd" />
+                                                </svg>
+                                                Expand Map
+                                            </button>
+                                        </div>
+                                        <div id="map" class="rounded-xl shadow-lg" style="height: 300px;"></div>
+                                        <p class="text-sm text-gray-500 mt-2">Drag the marker to your precise location. Address will be automatically detected.</p>
                                     </div>
 
                                     <!-- Hidden inputs for coordinates and rate -->
@@ -1026,6 +1116,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById("latitude").value = defaultLat;
                 document.getElementById("longitude").value = defaultLng;
 
+                // Function to get address from coordinates using reverse geocoding
+                function getAddressFromCoordinates(lat, lng) {
+                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data && data.display_name) {
+                                document.getElementById("address").value = data.display_name;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching address:', error);
+                            document.getElementById("address").value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+                        });
+                }
+
+                // Map expand functionality
+                const expandBtn = document.getElementById('expandMapBtn');
+                if (expandBtn) {
+                    expandBtn.addEventListener('click', function() {
+                        const mapDiv = document.getElementById('map');
+                        const isExpanded = mapDiv.style.height === '500px';
+                        
+                        if (isExpanded) {
+                            mapDiv.style.height = '300px';
+                            mapDiv.style.position = 'relative';
+                            mapDiv.style.zIndex = '1';
+                            expandBtn.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-1">
+                                    <path fill-rule="evenodd" d="M3.75 3.75v4.5a.75.75 0 0 1-1.5 0v-4.5A2.25 2.25 0 0 1 4.5 1.5h4.5a.75.75 0 0 1 0 1.5H4.5a.75.75 0 0 0-.75.75ZM3.75 15.75v4.5a.75.75 0 0 0 .75.75h4.5a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-1.5 0ZM15.75 3.75h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 1 0-1.5ZM15.75 15.75a.75.75 0 0 1 1.5 0v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1 0-1.5h4.5a.75.75 0 0 0 .75-.75v-4.5Z" clip-rule="evenodd" />
+                                </svg>
+                                Expand Map
+                            `;
+                        } else {
+                            mapDiv.style.height = '500px';
+                            mapDiv.style.position = 'relative';
+                            mapDiv.style.zIndex = '10';
+                            expandBtn.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-1">
+                                    <path fill-rule="evenodd" d="M9 9a.75.75 0 0 0 0 1.5h6a.75.75 0 0 0 0-1.5H9Z" clip-rule="evenodd" />
+                                </svg>
+                                Collapse Map
+                            `;
+                        }
+                        
+                        // Trigger map resize after animation
+                        setTimeout(() => {
+                            map.invalidateSize();
+                        }, 100);
+                    });
+                }
+
+                // Get initial address
+                getAddressFromCoordinates(defaultLat, defaultLng);
+
                 // Function to handle successful geolocation
                 function onLocationFound(e) {
                     const lat = e.latlng.lat;
@@ -1034,6 +1178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     marker.setLatLng(e.latlng);
                     document.getElementById("latitude").value = lat;
                     document.getElementById("longitude").value = lng;
+                    getAddressFromCoordinates(lat, lng);
                 }
 
                 // Function to handle geolocation error
@@ -1048,15 +1193,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 map.on('locationerror', onLocationError);
                 map.locate({ setView: false, maxZoom: 16 });
 
-                // Update coordinates on drag
+                // Update coordinates and address on drag
                 marker.on('dragend', function (e) {
                     const pos = marker.getLatLng();
                     document.getElementById("latitude").value = pos.lat;
                     document.getElementById("longitude").value = pos.lng;
+                    getAddressFromCoordinates(pos.lat, pos.lng);
                 });
             }
         });
     </script>
+    
+    <?php include 'include/footer.php'; ?>
 </body>
 </html>
 <?php
