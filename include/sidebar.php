@@ -90,6 +90,7 @@ $userRole = $_SESSION['user_role'] ?? 'guest';
     <?php elseif ($userRole === 'user'): ?>
         <a href="sell.php">Request Pickup</a>
         <a href="pickup_history.php">My Requests</a>
+        <a href="reusable.php">Reusable Item</a>
 
 
     <?php else: ?>

@@ -232,7 +232,7 @@ if ($userRole === 'admin') {
         <a href="#" class="cta-button primary" id="startBtn" onclick="revealOptions(event)">Start Now</a>
         <div id="options">
             <a href="user_dashboard.php?page=new_pickup" class="cta-button primary">Send a Pickup Request</a>
-            <a href="buy.php" class="cta-button secondary">See Reusable Products</a>
+            <a href="user_dashboard.php?page=reusable" class="cta-button secondary">See Reusable Products</a>
         </div>
         <?php if (!empty($dashboardLink)): ?>
             <a href="<?php echo $dashboardLink; ?>" class="cta-button secondary" style="margin-top: 10px;">Go to Dashboard</a>
