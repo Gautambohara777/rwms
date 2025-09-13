@@ -17,11 +17,60 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
 
+    .search-filter-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+
     .search-box {
         position: relative;
-        max-width: 500px;
-        margin: 0 auto;
+        flex: 1;
+        min-width: 300px;
     }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .filter-label {
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .filter-select {
+        padding: 8px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 25px;
+        background: #f8fafc;
+        color: #2d3748;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 180px;
+    }
+
+    .filter-select:focus {
+        outline: none;
+        border-color: #667eea;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .filter-info {
+        color: #718096;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-align: center;
+    }
+
 
     .search-input {
         width: 100%;
@@ -121,6 +170,21 @@
 
     .listing-card.active::before {
         transform: scaleX(1);
+    }
+
+    .listing-image {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 2px solid #e2e8f0;
+        transition: all 0.3s ease;
+    }
+
+    .listing-card:hover .listing-image {
+        border-color: #667eea;
+        transform: scale(1.02);
     }
 
     .listing-title {
@@ -345,6 +409,20 @@
     }
 
     @media (max-width: 768px) {
+        .search-filter-wrapper {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 15px;
+        }
+
+        .search-box {
+            min-width: auto;
+        }
+
+        .filter-group {
+            justify-content: center;
+        }
+
         .listing-grid {
             grid-template-columns: 1fr;
         }
@@ -361,11 +439,25 @@
 </style>
 
 <div class="user-interests-container">
-    <!-- Search Section -->
+    <!-- Search and Filter Section -->
     <div class="search-container">
-        <div class="search-box">
-            <input type="text" id="searchInput" class="search-input" placeholder="Search listings by title or status...">
-            <i class="fas fa-search search-icon"></i>
+        <div class="search-filter-wrapper">
+            <div class="search-box">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search listings by title or status...">
+                <i class="fas fa-search search-icon"></i>
+            </div>
+            <div class="filter-group">
+                <label for="statusFilter" class="filter-label">Status:</label>
+                <select id="statusFilter" class="filter-select">
+                    <option value="all">All Status</option>
+                    <option value="available">Available Only</option>
+                    <option value="Reserved">Reserved Only</option>
+                    <option value="available,Reserved">Available & Reserved</option>
+                </select>
+            </div>
+        </div>
+        <div class="filter-info">
+            <span id="filterInfo">Showing all listings</span>
         </div>
     </div>
 
@@ -385,7 +477,7 @@
             <div class="listing-grid" id="listing-grid">
                 <?php
                 if (isset($con) && $con->ping()) {
-                    $sql = "SELECT listing_id, title, status FROM reusable_waste_listings ORDER BY listing_id ASC";
+                    $sql = "SELECT listing_id, title, status, image FROM reusable_waste_listings WHERE status IN ('available', 'Reserved') ORDER BY listing_id ASC";
                     $result = $con->query($sql);
 
                     if ($result) {
@@ -393,6 +485,11 @@
                             while($row = $result->fetch_assoc()) {
                                 $statusClass = 'status-' . strtolower($row['status']);
                                 echo "<div class='listing-card' data-listing-id='" . $row['listing_id'] . "' onclick='showInterests(" . $row['listing_id'] . ", \"" . htmlspecialchars($row['title']) . "\")'>";
+                                if (!empty($row['image']) && file_exists($row['image'])) {
+                                    echo "<img src='" . htmlspecialchars($row['image']) . "' alt='" . htmlspecialchars($row['title']) . "' class='listing-image'>";
+                                } else {
+                                    echo "<div class='listing-image' style='background: linear-gradient(135deg, #e2e8f0, #cbd5e0); display: flex; align-items: center; justify-content: center; color: #718096; font-size: 2rem;'><i class='fas fa-image'></i></div>";
+                                }
                                 echo "<h3 class='listing-title'>" . htmlspecialchars($row['title']) . "</h3>";
                                 echo "<span class='listing-status " . $statusClass . "'>" . htmlspecialchars($row['status']) . "</span>";
                                 echo "</div>";
@@ -443,6 +540,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadStatistics();
         initializeSearch();
+        initializeFilter();
         loadAllListings();
     });
 
@@ -499,17 +597,79 @@
         const searchInput = document.getElementById('searchInput');
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase();
-            filterListings(searchTerm);
+            const statusFilter = document.getElementById('statusFilter').value;
+            filterListings(searchTerm, statusFilter);
         });
     }
 
-    // Filter listings based on search term
-    function filterListings(searchTerm) {
-        allListings.forEach(listing => {
-            const matches = listing.title.includes(searchTerm) || 
-                          listing.status.includes(searchTerm);
-            listing.element.style.display = matches ? 'block' : 'none';
+    // Initialize filter functionality
+    function initializeFilter() {
+        const statusFilter = document.getElementById('statusFilter');
+        statusFilter.addEventListener('change', function() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilterValue = this.value;
+            filterListings(searchTerm, statusFilterValue);
+            updateFilterInfo(statusFilterValue);
         });
+    }
+
+    // Filter listings based on search term and status
+    function filterListings(searchTerm, statusFilter) {
+        let visibleCount = 0;
+        
+        allListings.forEach(listing => {
+            const matchesSearch = listing.title.includes(searchTerm) || 
+                                listing.status.includes(searchTerm);
+            
+            let matchesStatus = true;
+            if (statusFilter !== 'all') {
+                if (statusFilter.includes(',')) {
+                    // Multiple statuses (e.g., "available,Reserved")
+                    const allowedStatuses = statusFilter.split(',').map(s => s.trim().toLowerCase());
+                    matchesStatus = allowedStatuses.includes(listing.status);
+                } else {
+                    // Single status
+                    matchesStatus = listing.status === statusFilter.toLowerCase();
+                }
+            }
+            
+            const matches = matchesSearch && matchesStatus;
+            listing.element.style.display = matches ? 'block' : 'none';
+            
+            if (matches) visibleCount++;
+        });
+        
+        // Update filter info
+        updateFilterInfo(statusFilter, visibleCount);
+    }
+
+    // Update filter information display
+    function updateFilterInfo(statusFilter, visibleCount = null) {
+        const filterInfo = document.getElementById('filterInfo');
+        let statusText = '';
+        
+        switch(statusFilter) {
+            case 'all':
+                statusText = 'all listings';
+                break;
+            case 'available':
+                statusText = 'available listings only';
+                break;
+            case 'Reserved':
+                statusText = 'reserved listings only';
+                break;
+            case 'available,Reserved':
+                statusText = 'available & reserved listings';
+                break;
+            default:
+                statusText = 'filtered listings';
+        }
+        
+        if (visibleCount !== null) {
+            filterInfo.textContent = `Showing ${visibleCount} of ${allListings.length} ${statusText}`;
+        } else {
+            filterInfo.textContent = `Showing ${statusText}`;
+        }
     }
 
     // Show interests for a specific listing

@@ -202,9 +202,11 @@ if ($result) {
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
             transition: transform 0.3s ease-in-out;
             position: fixed;
-            height: 100%;
+            height: calc(100vh - 80px);
             left: 0;
             top: 80px;
+            overflow-y: auto;
+            z-index: 1000;
         }
 
         .sidebar h2 {
@@ -220,6 +222,30 @@ if ($result) {
             padding: 0;
             margin: 0;
             flex-grow: 1;
+            overflow-y: auto;
+        }
+        
+        /* Custom scrollbar for sidebar */
+        .sidebar::-webkit-scrollbar,
+        .sidebar ul::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sidebar::-webkit-scrollbar-track,
+        .sidebar ul::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb,
+        .sidebar ul::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .sidebar ul::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
         }
 
         .sidebar li {
@@ -514,11 +540,11 @@ if ($result) {
         /* New Styles for Map and Pickup List in In-Progress View */
         .live-route-container {
             display: grid;
-            grid-template-columns: 3fr 1fr;
+            grid-template-columns: 4fr 1fr;
             gap: 16px;
         }
         #map {
-            height: 520px;
+            height: 700px;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,.08);
         }
@@ -546,6 +572,27 @@ if ($result) {
         }
         .pickup-item .btn:hover {
             background: var(--secondary-color);
+        }
+        .pickup-item .btn.disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .pickup-item .btn.disabled:hover {
+            background-color: #ccc;
+            transform: none;
+        }
+        .rate-not-set {
+            border-left: 4px solid #ff9800;
+            background-color: #fff3e0;
+        }
+        .rate-warning {
+            color: #f57c00;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .rate-display {
+            font-weight: 600;
         }
         .direction-steps {
             margin-bottom: 12px;
@@ -679,7 +726,7 @@ if ($result) {
                     <?php foreach ($rates as $rate): ?>
                         <div class="rate-item">
                             <strong><?php echo htmlspecialchars($rate['waste_type']); ?></strong>
-                            <span>Rs.<?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg</span>
+                            <span>NPR <?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg</span>
                             <small>(Updated: <?php echo htmlspecialchars($rate['updated_at']); ?>)</small>
                         </div>
                     <?php endforeach; ?>
@@ -1078,7 +1125,7 @@ if ($result) {
                         <?php foreach ($rates as $rate): ?>
                             <div class="rate-item">
                                 <strong><?php echo htmlspecialchars($rate['waste_type']); ?></strong>
-                                <span>Rs.<?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg</span>
+                                <span>NPR <?php echo htmlspecialchars($rate['rate_per_kg']); ?>/kg</span>
                                 <small>(Updated: <?php echo htmlspecialchars($rate['updated_at']); ?>)</small>
                             </div>
                         <?php endforeach; ?>
@@ -1253,10 +1300,17 @@ if ($result) {
         let html='';
         ordered.forEach((p,i)=>{
             let dist = haversine(start.lat,start.lng,p.lat,p.lng).toFixed(2);
-            html+=`<div class="pickup-item" data-id="${p.id}" data-items="${p.waste_type}" data-weight="${p.weight}" data-rate="${p.rate}">
+            let rateDisplay = p.rate > 0 ? p.rate : 'Not Set';
+            let rateClass = p.rate > 0 ? '' : 'rate-not-set';
+            let collectButton = p.rate > 0 ? 
+                `<button class="btn" onclick="markCollected(${p.id})">Mark as Collected</button>` : 
+                `<button class="btn disabled" disabled title="Rate must be set first">Mark as Collected</button>`;
+            
+            html+=`<div class="pickup-item ${rateClass}" data-id="${p.id}" data-items="${p.waste_type}" data-weight="${p.weight}" data-rate="${p.rate}">
                 <strong>${i+1}. ${p.customer_name} (${p.phone})</strong><br>
-                ${p.waste_type} • ${p.weight}kg • Rate: ${p.rate} • ${dist} km<br>
-                <button class="btn" onclick="markCollected(${p.id})">Mark as Collected</button>
+                ${p.waste_type} • ${p.weight}kg • Rate: <span class="rate-display">${rateDisplay}</span> • ${dist} km<br>
+                ${p.rate <= 0 ? '<span class="rate-warning">⚠️ Rate not set - Update pickup first</span><br>' : ''}
+                ${collectButton}
                 <button class="btn secondary" onclick="showUpdateForm(${p.id})">Update Pickup</button>
             </div>`;
         });
@@ -1318,15 +1372,22 @@ if ($result) {
     document.getElementById("form-final-weight")?.addEventListener("input", calculateTotal);
     document.getElementById("form-rate")?.addEventListener("input", calculateTotal);
 
-    // Function to mark as collected with a simple confirmation
+    // Function to mark as collected with rate validation
     async function markCollected(id){
-        if (!confirm(`Are you sure you want to mark pickup #${id} as 'Collected'?`)) return;
+        const item = document.querySelector(`.pickup-item[data-id='${id}']`);
+        const rate = parseFloat(item.getAttribute('data-rate'));
+        
+        // Check if rate is set and greater than 0
+        if (!rate || rate <= 0) {
+            alert('Cannot mark as collected: Rate is not set or is 0. Please use "Update Pickup" to set the rate first.');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to mark pickup #${id} as 'Collected'?\nRate: ${rate} per kg`)) return;
         
         try{
-            const item = document.querySelector(`.pickup-item[data-id='${id}']`);
             const collectedItems = item.getAttribute('data-items');
             const finalWeight = item.getAttribute('data-weight');
-            const rate = item.getAttribute('data-rate');
 
             const res = await fetch('newupdate.php', {
                 method: 'POST',

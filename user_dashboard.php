@@ -1143,8 +1143,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if (isset($_GET['status']) && $_GET['status'] !== '') {
                                 $status = $con->real_escape_string($_GET['status']);
                                 $whereClauses[] = "status = '$status'";
+                            } else {
+                                // By default, only show Available and Reserved items
+                                $whereClauses[] = "status IN ('Available', 'Reserved')";
                             }
-                            // If status is empty (All Items), don't add any status filter
                             
                             // Combine all WHERE clauses with 'AND'
                             if (!empty($whereClauses)) {
@@ -1179,9 +1181,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         </div>
                                         <div>
                                             <select name="status" id="status-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-                                                <option value="">All Items</option>
-                                                <option value="Available" <?php echo (isset($_GET['status']) && $_GET['status'] == 'Available') ? 'selected' : ''; ?>>Available</option>
-                                                <option value="Reserved" <?php echo (isset($_GET['status']) && $_GET['status'] == 'Reserved') ? 'selected' : ''; ?>>Reserved</option>
+                                                <option value="">Available & Reserved</option>
+                                                <option value="Available" <?php echo (isset($_GET['status']) && $_GET['status'] == 'Available') ? 'selected' : ''; ?>>Available Only</option>
+                                                <option value="Reserved" <?php echo (isset($_GET['status']) && $_GET['status'] == 'Reserved') ? 'selected' : ''; ?>>Reserved Only</option>
                                                 <option value="Interested" <?php echo (isset($_GET['status']) && $_GET['status'] == 'Interested') ? 'selected' : ''; ?>>Interested Items</option>
                                             </select>
                                         </div>
@@ -1509,98 +1511,364 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById("latitude").value = defaultLat;
                 document.getElementById("longitude").value = defaultLng;
 
-                // Function to get address from coordinates using reverse geocoding
+                // Function to get address from coordinates using multiple detailed mapping services
                 function getAddressFromCoordinates(lat, lng) {
                     // Show loading state
                     const addressField = document.getElementById("address");
-                    addressField.value = "Detecting address...";
+                    addressField.value = "Detecting detailed address...";
                     addressField.style.color = "#6B7280";
                     
-                    // Simple approach with timeout
-                    const timeout = setTimeout(() => {
-                        addressField.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-                        addressField.style.color = "#6B7280";
-                    }, 5000); // 5 second timeout
+                    // Try multiple detailed geocoding services in parallel
+                    const geocodingPromises = [
+                        // OpenStreetMap with maximum detail
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en&extratags=1&namedetails=1&polygon_geojson=1&email=your-email@example.com`)
+                            .then(response => response.json())
+                            .catch(() => null),
+                        
+                        // BigDataCloud for detailed location info
+                        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`)
+                            .then(response => response.json())
+                            .catch(() => null),
+                        
+                        // Google Maps Geocoding (requires API key - uncomment and add your key)
+                        // fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=YOUR_GOOGLE_MAPS_API_KEY&result_type=street_address|premise|subpremise|point_of_interest|establishment`)
+                        //     .then(response => response.json())
+                        //     .then(data => processGoogleMapsData(data))
+                        //     .catch(() => null),
+                        
+                        // MapBox (if you have an API key, replace YOUR_MAPBOX_TOKEN)
+                        // fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=YOUR_MAPBOX_TOKEN&types=poi,address,place&limit=1`)
+                        //     .then(response => response.json())
+                        //     .catch(() => null),
+                        
+                        // Search for nearby places with detailed info
+                        searchNearbyDetailedPlaces(lat, lng),
+                        
+                        // Overpass API for detailed place information
+                        searchOverpassAPI(lat, lng)
+                    ];
                     
-                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`)
-                        .then(response => {
-                            clearTimeout(timeout);
-                            if (!response.ok) {
-                                throw new Error('Network response was not ok');
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            clearTimeout(timeout);
-                            console.log('Address data received:', data); // Debug log
+                    // Wait for all services to complete
+                    Promise.all(geocodingPromises).then(results => {
+                        console.log('All geocoding results:', results);
+                        
+                        let bestAddress = null;
+                        let bestScore = 0;
+                        
+                        // Evaluate each result and pick the best one
+                        results.forEach((data, index) => {
+                            if (!data) return;
                             
-                            if (data && data.display_name) {
-                                // Use display_name as primary source
-                                addressField.value = data.display_name;
-                                addressField.style.color = "#374151";
-                            } else if (data && data.address) {
-                                // Try to build address from components
-                                let detailedAddress = buildDetailedAddress(data.address);
-                                if (detailedAddress && detailedAddress.trim() !== '') {
-                                    addressField.value = detailedAddress;
-                                    addressField.style.color = "#374151";
-                                } else {
-                                    addressField.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-                                    addressField.style.color = "#6B7280";
-                                }
-                            } else {
-                                addressField.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-                                addressField.style.color = "#6B7280";
+                            let address = null;
+                            let score = 0;
+                            
+                            if (index === 0) {
+                                // OpenStreetMap Nominatim
+                                address = processNominatimData(data);
+                                score = calculateAddressScore(address, data);
+                            } else if (index === 1) {
+                                // BigDataCloud
+                                address = processBigDataCloudData(data);
+                                score = calculateAddressScore(address, data);
+                            } else if (index === 2) {
+                                // Nearby places
+                                address = data;
+                                score = data ? 80 : 0;
+                            } else if (index === 3) {
+                                // Overpass API
+                                address = data;
+                                score = data ? 90 : 0;
                             }
-                        })
-                        .catch(error => {
-                            clearTimeout(timeout);
-                            console.error('Error fetching address:', error);
-                            addressField.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-                            addressField.style.color = "#6B7280";
+                            
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestAddress = address;
+                            }
                         });
+                        
+                        // Set the best address found
+                        if (bestAddress && bestAddress.trim() !== '') {
+                            addressField.value = bestAddress;
+                            addressField.style.color = "#374151";
+                            addressField.placeholder = "Address will be automatically detected from map location...";
+                        } else {
+                            // Fallback to manual entry
+                            addressField.value = "Detailed address not found. Please enter address manually.";
+                            addressField.style.color = "#DC2626";
+                            addressField.placeholder = "Please enter the complete pickup address manually...";
+                        }
+                    }).catch(error => {
+                        console.error('Error in geocoding:', error);
+                        addressField.value = "Address detection failed. Please enter address manually.";
+                        addressField.style.color = "#DC2626";
+                        addressField.placeholder = "Please enter the complete pickup address manually...";
+                    });
+                }
+
+                // Function to search for nearby detailed places
+                function searchNearbyDetailedPlaces(lat, lng) {
+                    return new Promise((resolve) => {
+                        const searchRadius = 0.002; // ~200 meters
+                        const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=&lat=${lat}&lon=${lng}&radius=${searchRadius}&addressdetails=1&extratags=1&namedetails=1&limit=10&zoom=18&email=your-email@example.com`;
+                        
+                        fetch(searchUrl)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data && data.length > 0) {
+                                    // Find the most specific named place
+                                    for (const place of data) {
+                                        if (place.extratags && (place.extratags.name || place.extratags.brand || place.extratags.operator)) {
+                                            let placeName = place.extratags.name || place.extratags.brand || place.extratags.operator;
+                                            if (place.address) {
+                                                const address = buildDetailedAddress(place.address, place.extratags);
+                                                resolve(`${placeName}, ${address}`);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                resolve(null);
+                            })
+                            .catch(() => resolve(null));
+                    });
+                }
+
+                // Function to search Overpass API for detailed place information
+                function searchOverpassAPI(lat, lng) {
+                    return new Promise((resolve) => {
+                        const radius = 50; // 50 meters
+                        const overpassQuery = `
+                            [out:json][timeout:10];
+                            (
+                                node["name"]["amenity"~"^(restaurant|shop|bank|hospital|school|university|hotel|pharmacy|fuel|parking|cinema|theatre|museum|library|post_office|police|fire_station|townhall|place_of_worship)$"](around:${radius},${lat},${lng});
+                                way["name"]["amenity"~"^(restaurant|shop|bank|hospital|school|university|hotel|pharmacy|fuel|parking|cinema|theatre|museum|library|post_office|police|fire_station|townhall|place_of_worship)$"](around:${radius},${lat},${lng});
+                                relation["name"]["amenity"~"^(restaurant|shop|bank|hospital|school|university|hotel|pharmacy|fuel|parking|cinema|theatre|museum|library|post_office|police|fire_station|townhall|place_of_worship)$"](around:${radius},${lat},${lng});
+                            );
+                            out center;
+                        `;
+                        
+                        fetch('https://overpass-api.de/api/interpreter', {
+                            method: 'POST',
+                            body: overpassQuery
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.elements && data.elements.length > 0) {
+                                const element = data.elements[0];
+                                if (element.tags && element.tags.name) {
+                                    const placeName = element.tags.name;
+                                    const amenity = element.tags.amenity || '';
+                                    resolve(`${placeName} (${amenity})`);
+                                    return;
+                                }
+                            }
+                            resolve(null);
+                        })
+                        .catch(() => resolve(null));
+                    });
+                }
+
+                // Function to process Nominatim data
+                function processNominatimData(data) {
+                    if (data && data.display_name) {
+                        return data.display_name;
+                    } else if (data && data.address) {
+                        return buildDetailedAddress(data.address, data.extratags);
+                    }
+                    return null;
+                }
+
+                // Function to process BigDataCloud data
+                function processBigDataCloudData(data) {
+                    if (data && data.localityInfo) {
+                        const parts = [];
+                        
+                        // Try to get the most specific location first
+                        if (data.localityInfo.administrative) {
+                            const admin = data.localityInfo.administrative;
+                            for (let i = admin.length - 1; i >= 0; i--) {
+                                if (admin[i].name && admin[i].name !== data.city && admin[i].name !== data.principalSubdivision) {
+                                    parts.unshift(admin[i].name);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Add street-level information if available
+                        if (data.street) {
+                            parts.unshift(data.street);
+                        }
+                        
+                        // Add city/town information
+                        if (data.city) {
+                            parts.push(data.city);
+                        } else if (data.locality) {
+                            parts.push(data.locality);
+                        }
+                        
+                        // Add postal code
+                        if (data.postcode) {
+                            parts.push(data.postcode);
+                        }
+                        
+                        return parts.join(', ');
+                    } else if (data && data.locality) {
+                        return data.locality;
+                    }
+                    return null;
+                }
+
+                // Function to process Google Maps data
+                function processGoogleMapsData(data) {
+                    if (data && data.results && data.results.length > 0) {
+                        // Look for the most specific result
+                        for (const result of data.results) {
+                            if (result.formatted_address) {
+                                // Check if it's a specific place
+                                if (result.types.includes('point_of_interest') || 
+                                    result.types.includes('establishment') || 
+                                    result.types.includes('premise')) {
+                                    return result.formatted_address;
+                                }
+                            }
+                        }
+                        // Fallback to first result
+                        return data.results[0].formatted_address;
+                    }
+                    return null;
+                }
+
+                // Function to calculate address score based on specificity
+                function calculateAddressScore(address, data) {
+                    if (!address) return 0;
+                    
+                    let score = 0;
+                    
+                    // Higher score for named places
+                    if (data && data.extratags) {
+                        if (data.extratags.name) score += 50;
+                        if (data.extratags.brand) score += 45;
+                        if (data.extratags.operator) score += 40;
+                    }
+                    
+                    // Score based on address components
+                    if (address.includes('Street') || address.includes('Road') || address.includes('Avenue')) score += 30;
+                    if (address.includes('Building') || address.includes('Mall') || address.includes('Center')) score += 35;
+                    if (address.includes('Restaurant') || address.includes('Shop') || address.includes('Store')) score += 40;
+                    
+                    // Penalty for generic addresses
+                    if (address.includes('State') && !address.includes('Street')) score -= 20;
+                    if (address.includes('Country') && !address.includes('Street')) score -= 30;
+                    
+                    // Bonus for detailed addresses
+                    if (address.split(',').length > 3) score += 10;
+                    
+                    return Math.max(0, score);
                 }
 
                 // Function to build a detailed address from address components
-                function buildDetailedAddress(address) {
+                function buildDetailedAddress(address, extratags = null) {
                     let parts = [];
+                    let hasSpecificLocation = false;
+                    let hasNamedPlace = false;
                     
-                    // Add house number and street if available
-                    if (address.house_number && address.road) {
-                        parts.push(`${address.house_number} ${address.road}`);
-                    } else if (address.road) {
-                        parts.push(address.road);
+                    // Priority 1: Named places and buildings (most specific)
+                    if (extratags) {
+                        // Check for specific named places
+                        if (extratags.name) {
+                            parts.push(extratags.name);
+                            hasNamedPlace = true;
+                            hasSpecificLocation = true;
+                        } else if (extratags.brand) {
+                            parts.push(extratags.brand);
+                            hasNamedPlace = true;
+                            hasSpecificLocation = true;
+                        } else if (extratags.operator) {
+                            parts.push(extratags.operator);
+                            hasNamedPlace = true;
+                            hasSpecificLocation = true;
+                        } else if (extratags.wikidata) {
+                            // Sometimes wikidata can provide name information
+                            parts.push("Named Location");
+                            hasNamedPlace = true;
+                            hasSpecificLocation = true;
+                        }
                     }
                     
-                    // Add neighborhood or suburb
+                    // Priority 2: Building names and amenities
+                    if (address.building) {
+                        if (!hasNamedPlace) {
+                            parts.unshift(address.building);
+                            hasSpecificLocation = true;
+                        }
+                    }
+                    
+                    // Check for specific amenities (shops, restaurants, etc.)
+                    const amenityTypes = ['shop', 'amenity', 'leisure', 'tourism', 'office', 'craft'];
+                    for (const type of amenityTypes) {
+                        if (address[type]) {
+                            if (!hasNamedPlace) {
+                                parts.unshift(address[type]);
+                                hasSpecificLocation = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Priority 3: House number and street
+                    if (address.house_number && address.road) {
+                        if (!hasNamedPlace) {
+                            parts.unshift(`${address.house_number} ${address.road}`);
+                        } else {
+                            parts.push(`${address.house_number} ${address.road}`);
+                        }
+                        hasSpecificLocation = true;
+                    } else if (address.road && !hasNamedPlace) {
+                        parts.unshift(address.road);
+                        hasSpecificLocation = true;
+                    } else if (address.pedestrian && !hasNamedPlace) {
+                        parts.unshift(address.pedestrian);
+                        hasSpecificLocation = true;
+                    } else if (address.footway && !hasNamedPlace) {
+                        parts.unshift(address.footway);
+                        hasSpecificLocation = true;
+                    } else if (address.path && !hasNamedPlace) {
+                        parts.unshift(address.path);
+                        hasSpecificLocation = true;
+                    } else if (address.track && !hasNamedPlace) {
+                        parts.unshift(address.track);
+                        hasSpecificLocation = true;
+                    }
+                    
+                    // Priority 4: Local area (neighborhood, suburb, district)
                     if (address.neighbourhood) {
                         parts.push(address.neighbourhood);
                     } else if (address.suburb) {
                         parts.push(address.suburb);
+                    } else if (address.district) {
+                        parts.push(address.district);
+                    } else if (address.quarter) {
+                        parts.push(address.quarter);
+                    } else if (address.borough) {
+                        parts.push(address.borough);
                     }
                     
-                    // Add city or town
+                    // Priority 5: City, town, or village
                     if (address.city) {
                         parts.push(address.city);
                     } else if (address.town) {
                         parts.push(address.town);
                     } else if (address.village) {
                         parts.push(address.village);
+                    } else if (address.hamlet) {
+                        parts.push(address.hamlet);
+                    } else if (address.municipality) {
+                        parts.push(address.municipality);
                     }
                     
-                    // Add district or county
-                    if (address.county) {
-                        parts.push(address.county);
-                    }
-                    
-                    // Add state or region
-                    if (address.state) {
-                        parts.push(address.state);
-                    }
-                    
-                    // Add country
-                    if (address.country) {
-                        parts.push(address.country);
+                    // Priority 6: Postal code
+                    if (address.postcode) {
+                        parts.push(address.postcode);
                     }
                     
                     // Join parts with commas and clean up
@@ -1608,6 +1876,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // Clean up extra spaces and commas
                     detailedAddress = detailedAddress.replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim();
+                    
+                    // If we don't have a specific location, try to find nearby places
+                    if (!hasSpecificLocation && detailedAddress.length > 0) {
+                        // Check if we're only getting broad area info
+                        const broadAreaPattern = /^(state|region|province|country|county)/i;
+                        if (broadAreaPattern.test(detailedAddress) || parts.length <= 2) {
+                            detailedAddress = "Near " + detailedAddress;
+                        }
+                    }
                     
                     return detailedAddress;
                 }
@@ -1619,13 +1896,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         const addressField = document.getElementById('address');
                         const currentAddress = addressField.value;
                         
-                        // If address field is empty or shows coordinates, clear it for manual entry
-                        if (!currentAddress || currentAddress.includes('Lat:') || currentAddress.includes('Detecting')) {
+                        // If address field is empty, shows coordinates, or shows error messages, clear it for manual entry
+                        if (!currentAddress || 
+                            currentAddress.includes('Lat:') || 
+                            currentAddress.includes('Detecting') ||
+                            currentAddress.includes('Address detection failed') ||
+                            currentAddress.includes('Please enter address manually')) {
                             addressField.value = '';
                             addressField.placeholder = 'Please enter the complete pickup address manually...';
+                            addressField.style.color = "#374151";
                             addressField.focus();
                         } else {
-                            // If there's already an address, just focus for editing
+                            // If there's already a valid address, just focus for editing
                             addressField.focus();
                         }
                     });

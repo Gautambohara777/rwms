@@ -519,14 +519,14 @@ if (!$is_admin) {
                                         <thead class="bg-gray-50">
                                             <tr>
                                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate ($/kg)</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (NPR/kg)</th>
                                             </tr>
                                         </thead>
                                         <tbody class="bg-white divide-y divide-gray-200">
                                             <?php foreach ($rates as $rate): ?>
                                                 <tr>
                                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize"><?php echo htmlspecialchars($rate['waste_type']); ?></td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$<?php echo number_format($rate['rate_per_kg'], 2); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">NPR <?php echo number_format($rate['rate_per_kg'], 2); ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         </tbody>
@@ -639,7 +639,7 @@ if (!$is_admin) {
                                         <thead class="bg-gray-50">
                                             <tr>
                                                 <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
-                                                <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Rate ($/kg)</th>
+                                                <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Rate (NPR/kg)</th>
                                                 <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
                                                 <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                             </tr>
@@ -678,7 +678,7 @@ if (!$is_admin) {
                                     <input type="text" id="waste_type" name="waste_type" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
                                 </div>
                                 <div class="mb-4">
-                                    <label for="rate_per_kg" class="block text-lg font-medium text-gray-700">Rate per KG ($)</label>
+                                    <label for="rate_per_kg" class="block text-lg font-medium text-gray-700">Rate per KG (NPR)</label>
                                     <input type="number" step="0.01" id="rate_per_kg" name="rate_per_kg" required class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg">
                                 </div>
                                 <div>
@@ -739,7 +739,6 @@ if (!$is_admin) {
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Waste Type</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Weight (kg)</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Pickup Date</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Assign Collector</th>
                                     </tr>
                                 </thead>
@@ -752,8 +751,7 @@ if (!$is_admin) {
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['requester_name']); ?></td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['requester_phone']); ?></td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['waste_type']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['final_weight']); ?></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= date('Y-m-d', strtotime($request['pickup_date'])); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900"><?= htmlspecialchars($request['weight'] ?? $request['final_weight'] ?? 'N/A'); ?></td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-lg">
                                                     <form method="post" action="?page=new_pickups">
                                                         <input type="hidden" name="request_id" value="<?= $request['id']; ?>">
@@ -772,7 +770,7 @@ if (!$is_admin) {
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="7" class="px-6 py-4 text-center text-gray-500">No new pickup requests found.</td>
+                                            <td colspan="6" class="px-6 py-4 text-center text-gray-500">No new pickup requests found.</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -807,7 +805,7 @@ if (!$is_admin) {
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Collector</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Final Weight (kg)</th>
-                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Cost ($)</th>
+                                        <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Total Cost (NPR)</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">2R Status</th>
                                         <th class="px-6 py-3 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
@@ -828,7 +826,7 @@ if (!$is_admin) {
                                                         <input type="number" step="0.01" name="final_weight" value="<?= htmlspecialchars($pickup['final_weight']); ?>" class="w-24 rounded-xl border-gray-300 shadow-sm text-sm" required>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-lg text-gray-900">
-                                                        $<?= number_format($pickup['total_cost'], 2); ?>
+                                                        NPR <?= number_format($pickup['total_cost'], 2); ?>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-lg">
                                                         <select name="2rstatus" class="rounded-xl border-gray-300 text-sm">
@@ -1045,87 +1043,312 @@ if (!$is_admin) {
             // Fetch all listings for display
             $result = $con->query("SELECT * FROM reusable_waste_listings ORDER BY listing_id DESC");
             ?>
-            <h2 class="text-3xl font-semibold text-gray-800 mb-6">Manage Reusable Waste</h2>
+            <h2 class="text-4xl font-bold text-gray-800 mb-8">Manage Reusable Waste</h2>
             
-            <div class="flex flex-col lg:flex-row gap-8">
-                <div class="lg:w-1/2 bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-2xl font-medium text-gray-700 mb-4">Current Listings</h3>
-                    <?php if ($result && $result->num_rows > 0): ?>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                <?php while ($row = $result->fetch_assoc()): ?>
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap"><img src="<?= htmlspecialchars($row['image']) ?>" alt="Listing Image" class="h-12 w-12 object-cover rounded"></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($row['title']) ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $row['quantity'] ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap">$<?= $row['price'] ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <form action="admin_dashboard.php?page=reusable_waste" method="post">
-                                            <input type="hidden" name="update_status" value="1">
-                                            <input type="hidden" name="listing_id" value="<?= $row['listing_id'] ?>">
-                                            <select name="status_value" onchange="this.form.submit()" class="block w-full border border-gray-300 rounded-md shadow-sm p-1">
-                                                <option value="available" <?= ($row['status'] == 'available') ? 'selected' : ''; ?>>Available</option>
-                                                <option value="sold" <?= ($row['status'] == 'sold') ? 'selected' : ''; ?>>Sold</option>
-                                                <option value="removed" <?= ($row['status'] == 'removed') ? 'selected' : ''; ?>>Removed</option>
-                                            </select>
-                                        </form>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <a href="admin_dashboard.php?page=reusable_waste&delete=<?= $row['listing_id'] ?>" 
-                                        onclick="return confirm('Are you sure you want to delete this listing?');" 
-                                        class="text-red-600 hover:text-red-900">Delete</a>
-                                    </td>
-                                </tr>
-                                <?php endwhile; ?>
-                            </tbody>
-                        </table>
+            <!-- Current Listings Section -->
+            <div class="mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-semibold text-gray-800">Current Listings</h3>
+                    <div class="text-sm text-gray-500">
+                        <?php if ($result && $result->num_rows > 0): ?>
+                            <?= $result->num_rows ?> listing<?= $result->num_rows !== 1 ? 's' : '' ?>
+                        <?php endif; ?>
                     </div>
-                    <?php else: ?>
-                    <p class="text-gray-500">No reusable waste listings found.</p>
-                    <?php endif; ?>
                 </div>
                 
-                <div class="lg:w-1/2 bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-2xl font-medium text-gray-700 mb-4">Add New Listing</h3>
-                    <form action="admin_dashboard.php?page=reusable_waste" method="post" enctype="multipart/form-data">
-                        <input type="hidden" name="add_listing" value="1">
-                        <div class="mb-4">
-                            <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-                            <input type="text" id="title" name="title" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
-                        </div>
-                        <div class="mb-4">
-                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-                            <textarea id="description" name="description" rows="3" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label for="quantity" class="block text-sm font-medium text-gray-700">Quantity (pcs)</label>
-                                <input type="number" id="quantity" name="quantity" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                <?php if ($result && $result->num_rows > 0): ?>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <?php while ($row = $result->fetch_assoc()): ?>
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                        <!-- Image Section -->
+                        <div class="relative h-48 overflow-hidden">
+                            <?php if (!empty($row['image']) && file_exists($row['image'])): ?>
+                                <img src="<?= htmlspecialchars($row['image']) ?>" 
+                                     alt="<?= htmlspecialchars($row['title']) ?>" 
+                                     class="w-full h-full object-cover">
+                            <?php else: ?>
+                                <div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                    <i class="fas fa-image text-4xl text-gray-400"></i>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <!-- Status Badge -->
+                            <div class="absolute top-3 right-3">
+                                <?php
+                                $statusClass = '';
+                                $statusText = '';
+                                switch($row['status']) {
+                                    case 'available':
+                                        $statusClass = 'bg-green-500 text-white';
+                                        $statusText = 'Available';
+                                        break;
+                                    case 'sold':
+                                        $statusClass = 'bg-gray-500 text-white';
+                                        $statusText = 'Sold';
+                                        break;
+                                    case 'Reserved':
+                                        $statusClass = 'bg-yellow-500 text-white';
+                                        $statusText = 'Reserved';
+                                        break;
+                                    default:
+                                        $statusClass = 'bg-gray-400 text-white';
+                                        $statusText = ucfirst($row['status']);
+                                }
+                                ?>
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold <?= $statusClass ?>">
+                                    <?= $statusText ?>
+                                </span>
                             </div>
-                            <div>
-                                <label for="price" class="block text-sm font-medium text-gray-700">Price ($)</label>
-                                <input type="number" step="0.01" id="price" name="price" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                        </div>
+                        
+                        <!-- Content Section -->
+                        <div class="p-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-2 line-clamp-2">
+                                <?= htmlspecialchars($row['title']) ?>
+                            </h4>
+                            
+                            <div class="space-y-2 mb-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-500">Quantity:</span>
+                                    <span class="text-sm font-medium text-gray-800"><?= $row['quantity'] ?> pcs</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-500">Price:</span>
+                                    <span class="text-lg font-bold text-green-600">NPR <?= number_format($row['price'], 2) ?></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="flex gap-2">
+                                <form action="admin_dashboard.php?page=reusable_waste" method="post" class="flex-1">
+                                    <input type="hidden" name="update_status" value="1">
+                                    <input type="hidden" name="listing_id" value="<?= $row['listing_id'] ?>">
+                                    <select name="status_value" onchange="this.form.submit()" 
+                                            class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="available" <?= ($row['status'] == 'available') ? 'selected' : ''; ?>>Available</option>
+                                        <option value="sold" <?= ($row['status'] == 'sold') ? 'selected' : ''; ?>>Sold</option>
+                                        <option value="Reserved" <?= ($row['status'] == 'Reserved') ? 'selected' : ''; ?>>Reserved</option>
+                                    </select>
+                                </form>
+                                
+                                <button onclick="confirmDelete(<?= $row['listing_id'] ?>)" 
+                                        class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>
-                        <div class="mb-4">
-                            <label for="image" class="block text-sm font-medium text-gray-700">Upload Image</label>
-                            <input type="file" id="image" name="image" accept="image/*" required class="mt-1 block w-full">
-                        </div>
-                        <button type="submit" class="w-full bg-green-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-600">Save Listing</button>
-                    </form>
+                    </div>
+                    <?php endwhile; ?>
                 </div>
+                <?php else: ?>
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-box-open text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-500 mb-2">No listings found</h3>
+                    <p class="text-gray-400">Start by adding your first reusable waste listing below.</p>
+                </div>
+                <?php endif; ?>
             </div>
+            
+            <!-- Add New Listing Section -->
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-plus text-green-600"></i>
+                    </div>
+                    <h3 class="text-2xl font-semibold text-gray-800">Add New Listing</h3>
+                </div>
+                
+                <form action="admin_dashboard.php?page=reusable_waste" method="post" enctype="multipart/form-data" class="space-y-6">
+                    <input type="hidden" name="add_listing" value="1">
+                    
+                    <!-- Title and Description Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-tag mr-2 text-gray-400"></i>Title
+                            </label>
+                            <input type="text" id="title" name="title" required 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                                   placeholder="Enter listing title">
+                        </div>
+                        
+                        <div>
+                            <label for="quantity" class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-cubes mr-2 text-gray-400"></i>Quantity (pcs)
+                            </label>
+                            <input type="number" id="quantity" name="quantity" required 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                                   placeholder="Enter quantity">
+                        </div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-align-left mr-2 text-gray-400"></i>Description
+                        </label>
+                        <textarea id="description" name="description" rows="4" required 
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none"
+                                  placeholder="Describe the item in detail"></textarea>
+                    </div>
+                    
+                    <!-- Price and Image Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label for="price" class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-rupee-sign mr-2 text-gray-400"></i>Price (NPR)
+                            </label>
+                            <input type="number" step="0.01" id="price" name="price" required 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                                   placeholder="0.00">
+                        </div>
+                        
+                        <div>
+                            <label for="image" class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-image mr-2 text-gray-400"></i>Upload Image
+                            </label>
+                            <div class="relative">
+                                <input type="file" id="image" name="image" accept="image/*" required 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="pt-4">
+                        <button type="submit" 
+                                class="w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-green-600 hover:to-green-700 focus:ring-4 focus:ring-green-200 transition-all duration-200 transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-save mr-2"></i>Save Listing
+                        </button>
+                    </div>
+                </form>
+            </div>
+            </div>
+            
+            <script>
+                function confirmDelete(listingId) {
+                    if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
+                        window.location.href = 'admin_dashboard.php?page=reusable_waste&delete=' + listingId;
+                    }
+                }
+            </script>
+            
+            <style>
+                .line-clamp-2 {
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+                
+                .hover\:scale-105:hover {
+                    transform: scale(1.05);
+                }
+                
+                .transform {
+                    transform: translateZ(0);
+                }
+                
+                .transition-all {
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .duration-300 {
+                    transition-duration: 300ms;
+                }
+                
+                .duration-200 {
+                    transition-duration: 200ms;
+                }
+                
+                .hover\:-translate-y-1:hover {
+                    transform: translateY(-0.25rem);
+                }
+                
+                .hover\:shadow-xl:hover {
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                }
+                
+                .shadow-lg {
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                }
+                
+                .rounded-2xl {
+                    border-radius: 1rem;
+                }
+                
+                .rounded-xl {
+                    border-radius: 0.75rem;
+                }
+                
+                .rounded-lg {
+                    border-radius: 0.5rem;
+                }
+                
+                .focus\:ring-2:focus {
+                    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+                }
+                
+                .focus\:ring-green-500:focus {
+                    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.5);
+                }
+                
+                .focus\:ring-4:focus {
+                    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+                }
+                
+                .focus\:ring-green-200:focus {
+                    box-shadow: 0 0 0 4px rgba(187, 247, 208, 0.5);
+                }
+                
+                .focus\:border-green-500:focus {
+                    border-color: #10b981;
+                }
+                
+                .file\:mr-4::file-selector-button {
+                    margin-right: 1rem;
+                }
+                
+                .file\:py-2::file-selector-button {
+                    padding-top: 0.5rem;
+                    padding-bottom: 0.5rem;
+                }
+                
+                .file\:px-4::file-selector-button {
+                    padding-left: 1rem;
+                    padding-right: 1rem;
+                }
+                
+                .file\:rounded-lg::file-selector-button {
+                    border-radius: 0.5rem;
+                }
+                
+                .file\:border-0::file-selector-button {
+                    border: 0;
+                }
+                
+                .file\:text-sm::file-selector-button {
+                    font-size: 0.875rem;
+                }
+                
+                .file\:font-semibold::file-selector-button {
+                    font-weight: 600;
+                }
+                
+                .file\:bg-green-50::file-selector-button {
+                    background-color: #f0fdf4;
+                }
+                
+                .file\:text-green-700::file-selector-button {
+                    color: #15803d;
+                }
+                
+                .hover\:file\:bg-green-100:hover::file-selector-button {
+                    background-color: #dcfce7;
+                }
+            </style>
             <?php
             break;
         case 'user_interests':
