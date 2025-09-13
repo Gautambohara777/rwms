@@ -14,6 +14,128 @@ if (!isset($con) || $con->connect_error) {
     die("Error: The database connection failed. Please ensure 'connect.php' is in the same directory and the credentials are correct.");
 }
 
+// Handle AJAX requests first, before any HTML output
+if (isset($_GET['action']) && $_GET['action'] === 'get_interests') {
+    header('Content-Type: application/json');
+    
+    // Check for the listing_id parameter
+    if (!isset($_GET['listing_id']) || empty($_GET['listing_id'])) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Listing ID not provided.'
+        ]);
+        exit;
+    }
+
+    $listingId = intval($_GET['listing_id']);
+
+    if (isset($con) && $con->ping()) {
+        // First check if the tables exist
+        $checkTables = $con->query("SHOW TABLES LIKE 'user_interests'");
+        if ($checkTables->num_rows == 0) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'user_interests table does not exist.'
+            ]);
+            exit;
+        }
+        
+        $checkUsers = $con->query("SHOW TABLES LIKE 'users'");
+        if ($checkUsers->num_rows == 0) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'users table does not exist.'
+            ]);
+            exit;
+        }
+
+        // SQL query to join the tables and get the necessary information, ordered by timestamp
+        $sql = "
+            SELECT 
+                u.name, 
+                u.email,
+                u.phone,
+                ui.timestamp
+            FROM 
+                user_interests ui
+            JOIN 
+                users u ON ui.user_id = u.id
+            WHERE 
+                ui.listing_id = ?
+            ORDER BY 
+                ui.timestamp ASC
+        ";
+
+        $stmt = $con->prepare($sql);
+        
+        if (!$stmt) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Failed to prepare statement: ' . $con->error
+            ]);
+            exit;
+        }
+
+        $stmt->bind_param("i", $listingId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $interests = [];
+        while ($row = $result->fetch_assoc()) {
+            $interests[] = $row;
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'data' => $interests
+        ]);
+
+        $stmt->close();
+    } else {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to connect to the database.'
+        ]);
+    }
+    exit;
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'get_stats') {
+    header('Content-Type: application/json');
+    
+    // Get statistics
+    if (isset($con) && $con->ping()) {
+        $stats = [];
+        
+        // Total listings
+        $result = $con->query("SELECT COUNT(*) as count FROM reusable_waste_listings");
+        $stats['totalListings'] = $result->fetch_assoc()['count'];
+        
+        // Total interests
+        $result = $con->query("SELECT COUNT(*) as count FROM user_interests");
+        $stats['totalInterests'] = $result->fetch_assoc()['count'];
+        
+        // Available listings
+        $result = $con->query("SELECT COUNT(*) as count FROM reusable_waste_listings WHERE status = 'available'");
+        $stats['availableListings'] = $result->fetch_assoc()['count'];
+        
+        // Pending listings
+        $result = $con->query("SELECT COUNT(*) as count FROM reusable_waste_listings WHERE status = 'pending'");
+        $stats['pendingListings'] = $result->fetch_assoc()['count'];
+        
+        echo json_encode([
+            'status' => 'success',
+            'data' => $stats
+        ]);
+    } else {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to connect to the database.'
+        ]);
+    }
+    exit;
+}
+
 // Simple PHP-based "router" to determine the current page.
 $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 $message = ''; // Initialize a message variable for user feedback.
@@ -203,7 +325,7 @@ if (!$is_admin) {
                 $listing_id = (int)($_POST['listing_id'] ?? 0);
                 $new_status = $_POST['status'] ?? 'available';
                 if ($listing_id > 0) {
-                    $stmt = $con->prepare("UPDATE reusable_waste_listings SET status = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt = $con->prepare("UPDATE reusable_waste_listings SET status = ? WHERE listing_id = ?");
                     $stmt->bind_param("si", $new_status, $listing_id);
                     $stmt->execute();
                     $stmt->close();
@@ -238,7 +360,7 @@ if (!$is_admin) {
             if (isset($_GET['delete_id'])) {
                 $delete_id = (int)($_GET['delete_id'] ?? 0);
                 if ($delete_id > 0) {
-                    $stmt = $con->prepare("SELECT image FROM reusable_waste_listings WHERE id = ?");
+                    $stmt = $con->prepare("SELECT image FROM reusable_waste_listings WHERE listing_id = ?");
                     $stmt->bind_param("i", $delete_id);
                     $stmt->execute();
                     $result = $stmt->get_result();
@@ -248,7 +370,7 @@ if (!$is_admin) {
                         }
                     }
                     $stmt->close();
-                    $stmt = $con->prepare("DELETE FROM reusable_waste_listings WHERE id = ?");
+                    $stmt = $con->prepare("DELETE FROM reusable_waste_listings WHERE listing_id = ?");
                     $stmt->bind_param("i", $delete_id);
                     $stmt->execute();
                     $stmt->close();
@@ -270,6 +392,7 @@ if (!$is_admin) {
     <title>Recycle Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -308,6 +431,7 @@ if (!$is_admin) {
                             'verify_pickups' => ['name' => 'Verify Pickups', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'],
                             'refused_pickups' => ['name' => 'Refused Pickups', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 15 12 11.41 8.41 15 7 13.59 10.59 10 7 6.41 8.41 5 12 8.59 15.59 5 17 6.41 13.41 10 17 13.59z'],
                             'reusable_waste' => ['name' => 'List Reusable Waste', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15.5h2V12h-2v5.5zm1-10C10.79 7.5 9.75 8.54 9.75 9.75S10.79 12 12 12s2.25-1.04 2.25-2.25S13.21 7.5 12 7.5z'],
+                            'user_interests' => ['name' => 'User Interests', 'icon' => 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'],
                             'reports' => ['name' => 'Reports', 'icon' => 'M22 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H2c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2h-4v2h4V4zm6 16H2V8h20v12zM9 10h2v8H9v-8zm4 0h2v8h-2v-8zm4 0h2v8h-2v-8z']
                         ];
                     ?>
@@ -1003,6 +1127,10 @@ if (!$is_admin) {
                 </div>
             </div>
             <?php
+            break;
+        case 'user_interests':
+            // Include the user interests component
+            include 'user_interests_component.php';
             break;
                 case 'reports':
                     $reportData = [];
