@@ -540,11 +540,13 @@ if ($result) {
         /* New Styles for Map and Pickup List in In-Progress View */
         .live-route-container {
             display: grid;
-            grid-template-columns: 4fr 1fr;
+            grid-template-columns: 3fr 1fr;
             gap: 16px;
+            height: calc(100vh - 100px);
+            min-height: 600px;
         }
         #map {
-            height: 700px;
+            height: 100%;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,.08);
         }
@@ -553,7 +555,36 @@ if ($result) {
             border-radius: 12px;
             padding: 16px;
             box-shadow: 0 1px 6px rgba(0,0,0,.06);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
+        .pickup-list-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        
+        /* Custom scrollbar for pickup list */
+        .pickup-list-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .pickup-list-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .pickup-list-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .pickup-list-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
         .pickup-item {
             border-bottom: 1px solid #eee;
             padding: 10px 0;
@@ -599,6 +630,58 @@ if ($result) {
             padding: 10px;
             background: #f9f9f9;
             border-radius: 8px;
+        }
+        
+        /* Location control styles */
+        .location-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .location-btn {
+            background: white;
+            border: 2px solid #2e7d32;
+            border-radius: 8px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2e7d32;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .location-btn:hover {
+            background: #2e7d32;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .location-btn:active {
+            transform: translateY(0);
+        }
+        
+        .location-btn i {
+            font-size: 16px;
+        }
+        
+        .location-status {
+            background: rgba(255,255,255,0.9);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            border: 1px solid #ddd;
         }
         
         /* New on-page form styles */
@@ -657,6 +740,15 @@ if ($result) {
             }
             .live-route-container {
                 grid-template-columns: 1fr;
+                height: auto;
+                min-height: 500px;
+            }
+            .live-route-container #map {
+                height: 400px;
+            }
+            .pickup-list-card {
+                height: auto;
+                max-height: 400px;
             }
             .counts {
                 grid-template-columns: 1fr;
@@ -901,15 +993,25 @@ if ($result) {
             mysqli_stmt_close($stmt);
         ?>
             <div class="content-body">
-                <h1>Live Optimized Pickup Route</h1>
-                <a href="?view=inprogress" class="btn secondary">Back to In Progress List</a>
-                <div class="live-route-container" style="margin-top: 20px;">
-                    <div id="map"></div>
+                <div class="live-route-container" style="margin-top: 0;">
+                    <div id="map" style="position: relative;">
+                        <div class="location-controls">
+                            <button class="location-btn" id="getLocationBtn" title="Get current location automatically">
+                                <i class="fas fa-crosshairs"></i>
+                                Get Location
+                            </button>
+                            <div class="location-status" id="locationStatus">
+                                Location: Auto-detecting...
+                            </div>
+                        </div>
+                    </div>
                     <div class="pickup-list-card">
                         <h3>Direction to Current Pickup</h3>
                         <div id="steps" class="direction-steps"></div>
                         <h3>Pickup List</h3>
-                        <div id="list"></div>
+                        <div class="pickup-list-content">
+                            <div id="list"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1221,6 +1323,8 @@ if ($result) {
     const pickups = <?php echo json_encode($pickups ?? []); ?>;
     let map;
     let collectorMarker, routingControl, otherMarkers=[];
+    let currentLocation = null;
+    let watchId = null;
 
     function haversine(lat1, lon1, lat2, lon2){
         const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
@@ -1237,6 +1341,57 @@ if ($result) {
             remaining=remaining.filter(p=>p.id!==nearest.id);
         }
         return order;
+    }
+
+    function updateLocationStatus(lat, lng, source = 'GPS') {
+        const statusEl = document.getElementById('locationStatus');
+        if (statusEl) {
+            statusEl.innerHTML = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br><small>Source: ${source}</small>`;
+        }
+    }
+
+    function getCurrentLocation() {
+        const btn = document.getElementById('getLocationBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting...';
+            btn.disabled = true;
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    currentLocation = { lat, lng };
+                    
+                    updateLocationStatus(lat, lng, 'Manual GPS');
+                    
+                    if (pickups.length > 0) {
+                        const ordered = greedyOrder(currentLocation, pickups);
+                        renderRoute(currentLocation, ordered);
+                    }
+                    
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-crosshairs"></i> Get Location';
+                        btn.disabled = false;
+                    }
+                },
+                function(error) {
+                    alert('Error getting location: ' + error.message);
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-crosshairs"></i> Get Location';
+                        btn.disabled = false;
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        } else {
+            alert('Geolocation is not supported by this browser.');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-crosshairs"></i> Get Location';
+                btn.disabled = false;
+            }
+        }
     }
 
     function renderRoute(start, ordered){
@@ -1256,21 +1411,41 @@ if ($result) {
         }
 
         const currentPickup = ordered[0];
+        
+        // Create draggable collector marker
+        collectorMarker = L.marker([start.lat, start.lng], {
+            icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/64/64113.png",iconSize:[25,25]}),
+            draggable: true
+        }).bindPopup("You (Collector) - Drag to update location");
+
+        // Add drag event listener to collector marker
+        collectorMarker.on('dragend', function(e) {
+            const newPos = e.target.getLatLng();
+            currentLocation = { lat: newPos.lat, lng: newPos.lng };
+            updateLocationStatus(newPos.lat, newPos.lng, 'Dragged');
+            
+            // Recalculate route with new position
+            if (pickups.length > 0) {
+                const newOrdered = greedyOrder(currentLocation, pickups);
+                updateRoute(newOrdered);
+            }
+        });
+
+        collectorMarker.addTo(map);
+
+        // Create pickup marker
+        const pickupMarker = L.marker([currentPickup.lat, currentPickup.lng], {
+            icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/190/190411.png",iconSize:[25,25]})
+        }).bindPopup("Next Pickup: "+currentPickup.customer_name);
+        pickupMarker.addTo(map);
+
         const waypoints = [L.latLng(start.lat,start.lng), L.latLng(currentPickup.lat,currentPickup.lng)];
 
         routingControl = L.Routing.control({
             waypoints: waypoints,
             lineOptions: {styles: [{color: 'blue', weight: 5}]},
             createMarker: function(i, wp, nWps) {
-                if(i===0){
-                    return L.marker(wp.latLng, {
-                        icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/64/64113.png",iconSize:[25,25]})
-                    }).bindPopup("You (Collector)");
-                } else {
-                    return L.marker(wp.latLng, {
-                        icon: L.icon({iconUrl:"https://cdn-icons-png.flaticon.com/512/190/190411.png",iconSize:[25,25]})
-                    }).bindPopup("Next Pickup: "+currentPickup.customer_name);
-                }
+                return null; // We're creating markers manually
             },
             addWaypoints: false,
             routeWhileDragging: false,
@@ -1296,7 +1471,47 @@ if ($result) {
             otherMarkers.push(m);
         });
 
-        // Pickup list
+        // Update pickup list
+        updatePickupList(ordered, start);
+    }
+
+    function updateRoute(ordered) {
+        if (!map || !collectorMarker || !ordered.length) return;
+        
+        const currentPickup = ordered[0];
+        const start = currentLocation;
+        
+        // Update routing control
+        if (routingControl) map.removeControl(routingControl);
+        
+        const waypoints = [L.latLng(start.lat, start.lng), L.latLng(currentPickup.lat, currentPickup.lng)];
+        
+        routingControl = L.Routing.control({
+            waypoints: waypoints,
+            lineOptions: {styles: [{color: 'blue', weight: 5}]},
+            createMarker: function(i, wp, nWps) {
+                return null; // We're creating markers manually
+            },
+            addWaypoints: false,
+            routeWhileDragging: false,
+            show: false
+        }).addTo(map);
+
+        // Update directions
+        routingControl.on('routesfound', function(e){
+            let html = '<div class="direction-steps"><strong>To: '+currentPickup.customer_name+'</strong><br>';
+            e.routes[0].instructions.forEach(step=>{
+                html += "• " + step.text + "<br>";
+            });
+            html += '</div>';
+            document.getElementById('steps').innerHTML = html;
+        });
+
+        // Update pickup list
+        updatePickupList(ordered, start);
+    }
+
+    function updatePickupList(ordered, start) {
         let html='';
         ordered.forEach((p,i)=>{
             let dist = haversine(start.lat,start.lng,p.lat,p.lng).toFixed(2);
@@ -1317,22 +1532,48 @@ if ($result) {
         document.getElementById('list').innerHTML=html;
     }
 
+    // Add event listener for the location button
+    document.getElementById('getLocationBtn')?.addEventListener('click', getCurrentLocation);
+
     if (window.location.search.includes('view=live-route')) {
         if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(pos=>{
-                let start={lat:pos.coords.latitude,lng:pos.coords.longitude};
-                if(pickups.length){
-                    let ordered=greedyOrder(start,pickups);
-                    renderRoute(start,ordered);
-                } else {
-                    const noDataHtml = '<div class="no-data">No active pickups.</div>';
-                    document.getElementById('map').innerHTML = noDataHtml;
-                    document.getElementById('steps').innerHTML = noDataHtml;
-                    document.getElementById('list').innerHTML = noDataHtml;
-                }
-            },()=>alert("Location access denied. Enable GPS."),{enableHighAccuracy:true});
+            // Start watching position for automatic updates
+            watchId = navigator.geolocation.watchPosition(
+                function(pos) {
+                    let start = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+                    currentLocation = start;
+                    updateLocationStatus(start.lat, start.lng, 'Auto GPS');
+                    
+                    if (pickups.length) {
+                        let ordered = greedyOrder(start, pickups);
+                        if (!map) {
+                            renderRoute(start, ordered);
+                        } else {
+                            // Update existing map
+                            collectorMarker.setLatLng([start.lat, start.lng]);
+                            updateRoute(ordered);
+                        }
+                    } else {
+                        if (!map) {
+                            const noDataHtml = '<div class="no-data">No active pickups.</div>';
+                            document.getElementById('map').innerHTML = noDataHtml;
+                            document.getElementById('steps').innerHTML = noDataHtml;
+                            document.getElementById('list').innerHTML = noDataHtml;
+                        }
+                    }
+                },
+                function(error) {
+                    console.log('Geolocation error:', error);
+                    updateLocationStatus(0, 0, 'GPS Error');
+                    if (!map) {
+                        document.getElementById('map').innerHTML = '<div class="no-data">Location access denied. Click "Get Location" to manually set your position.</div>';
+                    }
+                },
+                {enableHighAccuracy: true, timeout: 10000, maximumAge: 30000}
+            );
         } else {
             document.getElementById('map').innerHTML = '<div class="no-data">Geolocation is not supported by your browser.</div>';
+            updateLocationStatus(0, 0, 'Not Supported');
         }
     }
 
@@ -1389,7 +1630,7 @@ if ($result) {
             const collectedItems = item.getAttribute('data-items');
             const finalWeight = item.getAttribute('data-weight');
 
-            const res = await fetch('newupdate.php', {
+            const res = await fetch(window.location.href, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: new URLSearchParams({
